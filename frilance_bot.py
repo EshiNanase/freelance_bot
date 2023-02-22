@@ -178,7 +178,7 @@ def check_client(update, context):
 
 def chooze_rate(update, context):
     context.user_data["rate"] = update.message.text
-    url = f"http://127.0.0.1:8000/api/tariff /{update.message.text}"
+    url = f"http://127.0.0.1:8000/api/tariff/{update.message.text}"
     response = requests.get(url)
     response.raise_for_status()
     rate_name = response['name']
