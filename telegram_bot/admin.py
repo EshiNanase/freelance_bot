@@ -1,5 +1,5 @@
 from django.contrib import admin
-from telegram_bot.models import Administrator, Client, Freelancer, Tariff
+from telegram_bot.models import Administrator, Client, Freelancer, Tariff, Order
 
 
 @admin.register(Administrator)
@@ -20,3 +20,9 @@ class FreelancerAdmin(admin.ModelAdmin):
 @admin.register(Tariff)
 class TariffAdmin(admin.ModelAdmin):
     pass
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    readonly_fields = ('id',)
+    fields = ['title', 'id', 'description', 'client', 'freelancer', 'published', 'put_into_action', 'finished']
