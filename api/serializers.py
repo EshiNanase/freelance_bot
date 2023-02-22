@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from telegram_bot.models import Client, Order
+from telegram_bot.models import Client, Order, Freelancer, Tariff
+
+
+class TariffSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Tariff
+        fields = '__all__'
 
 
 class ClientSerializer(serializers.ModelSerializer):
@@ -11,9 +18,17 @@ class ClientSerializer(serializers.ModelSerializer):
         fields = ['chat_id', 'tariff']
 
 
+class FreelancerSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Freelancer
+        fields = '__all__'
+
+
 class OrderSerializer(serializers.ModelSerializer):
 
     client = ClientSerializer()
+    freelancer = FreelancerSerializer()
 
     class Meta:
         model = Order

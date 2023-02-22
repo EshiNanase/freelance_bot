@@ -8,7 +8,10 @@ class Tariff(models.Model):
     title = models.CharField(
         unique=True,
         max_length=256,
-        verbose_name='Название тарифа'
+        verbose_name='Название'
+    )
+    description = models.TextField(
+        verbose_name='Описание'
     )
     request_quantity = models.PositiveSmallIntegerField(
         verbose_name='Количество заявок'
