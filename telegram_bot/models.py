@@ -55,6 +55,7 @@ class Client(models.Model):
         verbose_name='Тариф'
     )
     requests_left = models.PositiveSmallIntegerField(
+        default=0,
         verbose_name='Кол-во оставшихся запросов'
     )
     end = models.DateField(
@@ -81,3 +82,48 @@ class Freelancer(models.Model):
     class Meta:
         verbose_name = 'Подрядчик'
         verbose_name_plural = 'Подрядчики'
+
+
+class Order(models.Model):
+
+    title = models.CharField(
+        max_length=256,
+        verbose_name='Название'
+    )
+    description = models.TextField(
+        max_length=256,
+        verbose_name='Описание'
+    )
+    client = models.ForeignKey(
+        to=Client,
+        on_delete=models.CASCADE,
+        verbose_name='Клиент'
+    )
+    freelancer = models.ForeignKey(
+        blank=True,
+        null=True,
+        to=Freelancer,
+        on_delete=models.SET_NULL,
+        verbose_name='Подрядчик'
+    )
+    published = models.DateTimeField(
+        default=datetime.now(),
+        verbose_name='Опубликован'
+    )
+    put_into_action = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name='Взят в работу'
+    )
+    finished = models.DateTimeField(
+        blank=True,
+        null=True,
+        verbose_name='Завершен'
+    )
+
+    class Meta:
+        verbose_name = 'Заказ'
+        verbose_name_plural = 'Заказы'
+
+    def __str__(self):
+        return f'{self.title} - {self.client.chat_id}'

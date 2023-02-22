@@ -1,11 +1,11 @@
-from telegram_bot.models import Client, Tariff
+from telegram_bot.models import Client, Tariff, Order
 from django.shortcuts import get_object_or_404
 from http import HTTPStatus
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from api.serializers import ClientSerializer
+from api.serializers import ClientSerializer, OrderSerializer
 
 
 @api_view(['GET'])
@@ -32,7 +32,7 @@ def get_tariffs(request) -> Response:
     )
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 def get_detailed_tariff(request, tariff_name) -> Response:
     tariff = get_object_or_404(Tariff, title=tariff_name)
     response = {
@@ -46,17 +46,28 @@ def get_detailed_tariff(request, tariff_name) -> Response:
     )
 
 
+@api_view(['GET'])
+def get_detailed_order(request, order_id) -> Response:
+    order = get_object_or_404(Order, id=order_id)
+    serializer = OrderSerializer(order)
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
+
 @api_view(['POST'])
 def create_client(request) -> Response:
 
-    serializer = ClientSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.data
+    data = request.data
 
-    tariff = Tariff.objects.get(title=data['tariff'])
+    serializer = ClientSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+
+    tariff = get_object_or_404(Tariff, title=data['tariff'])
     updated_values = {
         'tariff': tariff,
-        'request_left': tariff.request_quantity
+        'requests_left': tariff.request_quantity
     }
 
     client, created = Client.objects.update_or_create(
@@ -67,4 +78,4 @@ def create_client(request) -> Response:
         client.end = datetime.today() + relativedelta(months=1)
         client.save()
 
-    return Response(data=data, status=HTTPStatus.OK)
+    return Response(data=serializer.data, status=HTTPStatus.OK)
