@@ -33,3 +33,10 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+
+
+class OrderCreateSerializer(serializers.Serializer):
+
+    title = serializers.CharField()
+    description = serializers.CharField()
+    chat_id = serializers.IntegerField()
