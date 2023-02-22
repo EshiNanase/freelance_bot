@@ -106,23 +106,23 @@ def check_client(update, context):
         telegram_id = update.message.from_user.id
         context.user_data["telegram_id"] = telegram_id
 
-    url = f"http://127.0.0.1:8000/api/users/{telegram_id}"
+    url = f"http://127.0.0.1:8000/api/clients/{telegram_id}"
     response = requests.get(url)
-    response.raise_for_status()
 
-    status = 1
+    # status = 1
 
-    # if response.ok:
-    if status == 1:
-        rest_days = response['rest_days']
-        rest_orders = response['rest_orders']
-        rate_name = response['rate_name']
+    if response.ok:
+    # if status == 1:
+        rest_days = response.json()['rest_days']
+        rest_orders = response.json()['rest_orders']
+        rate_name = response.json()['rate_name']
 
         user = update.effective_user
         greetings = dedent(fr'''
                         {user.mention_markdown_v2()}\!
-                        Ваш тариф "Старт"
-                        У Вас осталось 3 заказа в этом месяце\.''')
+                        Ваш тариф "{rate_name}"
+                        Тариф действует до {rest_days}
+                        В вашем тарифе осталось {rest_orders} запросов\.''')
         message_keyboard = [["Новый заказ", "Мои заказы"]]
         markup = ReplyKeyboardMarkup(
             message_keyboard,
@@ -141,15 +141,15 @@ def check_client(update, context):
         update.message.reply_markdown_v2(text=greetings, reply_markup=markup)
         return States.ORDERS
 
-    # response = call_api_get('rate/send/')
-    # rates = response['rates']
-    # rates.extend(["Не важно"])
-    # message_keyboard = list(chunked(rates, 2))
+    response = call_api_get('api/all_tariffs/')
+    rates = response['tariffs']
+    rates.extend(["Назад"])
+    message_keyboard = list(chunked(rates, 2))
 
-    message_keyboard = [
-        ['Базовый', 'Продвинутый'],
-        ['VIP', 'Назад']
-    ]
+    # message_keyboard = [
+    #     ['Базовый', 'Продвинутый'],
+    #     ['VIP', 'Назад']
+    # ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
@@ -178,25 +178,24 @@ def check_client(update, context):
 
 def chooze_rate(update, context):
     context.user_data["rate"] = update.message.text
-    # payload = {
-    #     "rate": context.user_data["rate"],
-    # }
-    # response = call_api_post('info_rate/send/', payload=payload)
-    # rate_name = response['name']
-    # rate_description = response['description']
-    # rate_quantity = response['quantity']
-    # rate_price = response['price']
-    #
-    # rate_message = dedent(f"""\
-    #                     <b>Тариф</b>
-    #                     {rate_name}
-    #                     <b>Описание:</b>
-    #                     {rate_description}
-    #                     <b>Количество заявок в месяц:</b>
-    #                     {rate_quantity}
-    #                     <b>Стоимость тарифа:</b>
-    #                     {rate_price}
-    #                    """).replace("    ", "")
+    url = f"http://127.0.0.1:8000/api/tariff /{update.message.text}"
+    response = requests.get(url)
+    response.raise_for_status()
+    rate_name = response['name']
+    rate_description = response['description']
+    rate_quantity = response['quantity']
+    rate_price = response['price']
+
+    rate_message = dedent(f"""\
+                        <b>Тариф</b>
+                        {rate_name}
+                        <b>Описание:</b>
+                        {rate_description}
+                        <b>Количество заявок в месяц:</b>
+                        {rate_quantity}
+                        <b>Стоимость тарифа:</b>
+                        {rate_price}
+                       """).replace("    ", "")
 
     message_keyboard = [
         ['Назад', 'Выбрать']
@@ -206,11 +205,11 @@ def chooze_rate(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    # update.message.reply_text(text=rate_message,
-    #                           reply_markup=markup,
-    #                           parse_mode=ParseMode.HTML)
-    update.message.reply_text(text='тариф выбран',
-                              reply_markup=markup)
+    update.message.reply_text(text=rate_message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
+    # update.message.reply_text(text='тариф выбран',
+    #                           reply_markup=markup)
     return States.RATE_CHOIСE
 
 
