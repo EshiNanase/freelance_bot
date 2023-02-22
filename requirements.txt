@@ -1,4 +1,4 @@
-Django==4.1.1
+Django==3.2.12
 python-telegram-bot==13.12
 more-itertools==8.14.0
 environs==9.5.0
