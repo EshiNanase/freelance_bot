@@ -113,16 +113,15 @@ def check_client(update, context):
 
     if response.ok:
     # if status == 1:
-        rest_days = response.json()['rest_days']
-        rest_orders = response.json()['rest_orders']
-        rate_name = response.json()['rate_name']
-
+        rest_days = response.json()['days_left']
+        rest_orders = response.json()['requests_left']
+        rate_name = response.json()['tariff_title']
         user = update.effective_user
-        greetings = dedent(fr'''
-                        {user.mention_markdown_v2()}\!
+        greetings = dedent(f'''
                         Ваш тариф "{rate_name}"
                         Тариф действует до {rest_days}
-                        В вашем тарифе осталось {rest_orders} запросов\.''')
+                        В вашем тарифе осталось {rest_orders} запросов.''')
+
         message_keyboard = [["Новый заказ", "Мои заказы"]]
         markup = ReplyKeyboardMarkup(
             message_keyboard,
@@ -138,7 +137,7 @@ def check_client(update, context):
             )
             return States.ORDERS
 
-        update.message.reply_markdown_v2(text=greetings, reply_markup=markup)
+        update.message.reply_text(text=greetings, reply_markup=markup)
         return States.ORDERS
 
     response = call_api_get('api/all_tariffs/')
@@ -147,7 +146,7 @@ def check_client(update, context):
     message_keyboard = list(chunked(rates, 2))
 
     # message_keyboard = [
-    #     ['Базовый', 'Продвинутый'],
+    #     ['Эконом', 'Продвинутый'],
     #     ['VIP', 'Назад']
     # ]
     markup = ReplyKeyboardMarkup(
@@ -182,8 +181,8 @@ def chooze_rate(update, context):
     response = requests.get(url)
     response.raise_for_status()
     rate_name = response.json()['title']
-    # rate_description = response.json()['description']
-    rate_description = 'бла бла бла'
+    rate_description = response.json()['description']
+    # rate_description = 'бла бла бла'
     rate_quantity = response.json()['request_quantity']
     rate_price = response.json()['price']
 
@@ -230,13 +229,12 @@ def send_payment(update, context):
 
 def add_user(update, context):
     payload = {
-        "user_tg_id": context.user_data["user_telegram_id"],
-        "rate": context.user_data["rate"],
+        "chat_id": context.user_data["telegram_id"],
+        "tariff": context.user_data["rate"],
         "payment_date": datetime.datetime.now()
     }
     response = call_api_post('api/clients/add/', payload=payload)
-    if response.ok:
-        update.message.reply_text(text='Вы успешно зарегестрированы, можете начать пользоваться нашей платформой. Напишите /start')
+    update.message.reply_text(text='Вы успешно зарегестрированы, можете начать пользоваться нашей платформой. Напишите /start')
 
 
 def check_frilancer(update, context):
