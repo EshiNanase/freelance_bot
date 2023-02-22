@@ -11,7 +11,7 @@ class TariffSerializer(serializers.ModelSerializer):
 
 class ClientSerializer(serializers.ModelSerializer):
 
-    tariff = TariffSerializer()
+    tariff = serializers.CharField()
 
     class Meta:
         model = Client
@@ -28,6 +28,7 @@ class FreelancerSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
 
     client = ClientSerializer()
+    freelancer = FreelancerSerializer()
 
     class Meta:
         model = Order
