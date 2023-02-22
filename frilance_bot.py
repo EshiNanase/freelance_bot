@@ -181,10 +181,11 @@ def chooze_rate(update, context):
     url = f"http://127.0.0.1:8000/api/tariff/{update.message.text}"
     response = requests.get(url)
     response.raise_for_status()
-    rate_name = response['name']
-    rate_description = response['description']
-    rate_quantity = response['quantity']
-    rate_price = response['price']
+    rate_name = response.json()['title']
+    # rate_description = response.json()['description']
+    rate_description = 'бла бла бла'
+    rate_quantity = response.json()['request_quantity']
+    rate_price = response.json()['price']
 
     rate_message = dedent(f"""\
                         <b>Тариф</b>
@@ -233,7 +234,7 @@ def add_user(update, context):
         "rate": context.user_data["rate"],
         "payment_date": datetime.datetime.now()
     }
-    response = call_api_post('api/users/add/', payload=payload)
+    response = call_api_post('api/clients/add/', payload=payload)
     if response.ok:
         update.message.reply_text(text='Вы успешно зарегестрированы, можете начать пользоваться нашей платформой. Напишите /start')
 
