@@ -144,13 +144,14 @@ def create_order(request) -> Response:
         client=client
     )
 
-    for file in data['files']:
-        file, created = File.objects.get_or_create(
-            order=order,
-            file_url=file,
-        )
-        file.get_file_from_url()
-        file.save()
+    if data.get('files'):
+        for file in data['files']:
+            file, created = File.objects.get_or_create(
+                order=order,
+                file_url=file,
+            )
+            file.get_file_from_url()
+            file.save()
 
     return Response(
         data=serializer.data,
@@ -206,8 +207,8 @@ def get_client_orders(request, chat_id) -> Response:
     )
 
 
-# TODO Спросить про алгоритм фильтрации пяти случайных заказов
-@extend_schema(description='Отображение пяти случайных заказов')
+# TODO Спросить про алгоритм фильтрации заказов
+@extend_schema(description='Отображение пяти заказов, порядок с VIP\'а')
 @api_view(['GET'])
 def find_orders(request) -> Response:
 
@@ -236,3 +237,5 @@ def finish_order(request) -> Response:
         data=serializer.data,
         status=HTTPStatus.OK
     )
+
+# TODO Спросить менеджмент заказов со стороны клиента и фрилансера
