@@ -295,14 +295,21 @@ def verify_freelancer(update, context):
 
 def check(update, context):
 
-    order_id = update.message.text.replace('/replay_', '')
+    order_id = update.message.text.replace('/order_', '')
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
     message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
-    message_keyboard = [
-        [f'Взять в работу заказ №{order_id}'],
-        ['Назад']
-    ]
+    if order['freelancer'] is None:
+        message_keyboard = [
+            [f'Взять в работу заказ №{order_id}'],
+            ['Назад']
+        ]
+    else:
+        message_keyboard = [
+            [f'Подтвердить выполнение заказа №{order_id}'],
+            ['Получить контакт заказчика'],
+            ['Назад']
+        ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
@@ -319,10 +326,9 @@ def add_orders_to_frilancer(update, context):
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
 
-    endpoint = f'api/order/add'
+    endpoint = f'api/freelancers/appoint'
     payload = {
-        "title": order["title"],
-        "description": order["description"],
+        "order_id": order_id,
         "chat_id": chat_id
     }
     call_api_post(endpoint, payload)
@@ -370,6 +376,7 @@ def func_chunks_generators(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
 
+
 five = ''
 orders_by_five_elements = ''
 def show_five_orders(update, context):
@@ -385,7 +392,7 @@ def show_five_orders(update, context):
         five = next(orders_by_five_elements)
 
     ps = [
-        f'/replay_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five)]
+        f'/order_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five)]
     messages = ' '.join(ps)
     message_keyboard = [
         ['Назад', 'Следующие заказы']
@@ -397,6 +404,25 @@ def show_five_orders(update, context):
     )
     update.message.reply_text(text=messages, reply_markup=markup)
     return States.FRILANCER
+
+
+def show_frilancer_orders(update, context):
+    chat_id = update.effective_message.chat_id
+    url = f'api/freelancers/{chat_id}/orders'
+    orders = call_api_get(url)
+    ps = [
+        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(orders)]
+    messages = ' '.join(ps)
+    message_keyboard = [
+        ['Назад', 'Главное меню']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=messages, reply_markup=markup)
+    return States.FRILANCER_ORDERS
 
 
 # def error(update, context):
@@ -435,16 +461,20 @@ if __name__ == '__main__':
             ],
             States.FRILANCER: [
                 MessageHandler(Filters.command(False), check),
-                CommandHandler('replay', check),
+                CommandHandler('order', check),
                 MessageHandler(Filters.text('Выбрать заказ'), show_five_orders),
-                MessageHandler(Filters.text('Мои заказы'), show_five_orders),
+                MessageHandler(Filters.text('Мои заказы'), show_frilancer_orders),
                 MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
                 MessageHandler(Filters.text('Взять в работу'), add_orders_to_frilancer),
 
                 MessageHandler(Filters.text, start),
             ],
             States.FRILANCER_ORDERS: [
+                MessageHandler(Filters.command(False), check),
+                CommandHandler('order', check),
                 MessageHandler(Filters.text('Назад'), show_five_orders),
+                MessageHandler(Filters.text('Взять в работу'), show_frilancer_orders),
+                MessageHandler(Filters.text('Главное меню'), start),
                 MessageHandler(Filters.text, add_orders_to_frilancer),
             ],
             States.PRICE: [
