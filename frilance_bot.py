@@ -224,8 +224,8 @@ def send_payment(update, context):
     )
     chat_id = '???'
     tariff = '???'
-    update.message.reply_text(text=send_payment_link(chat_id, tariff),
-                              reply_markup=markup)
+    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
+    #                           reply_markup=markup)
     return States.PAYMENT
 
 

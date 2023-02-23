@@ -9,6 +9,12 @@ from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer,
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
 from rest_framework.pagination import PageNumberPagination
+import stripe
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.http.response import HttpResponse
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 @extend_schema(description='Проверка на клиента')
@@ -243,7 +249,32 @@ def finish_order(request) -> Response:
 # TODO Спросить про возможность "закрепить подрядчика за собой"
 
 
-@api_view(['POST'])
-def fullfill_order(request) -> Response:
+@csrf_exempt
+def stripe_webhook_view(request):
+    payload = request.body
+    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    event = stripe.Webhook.construct_event(
+        payload, sig_header, settings.STRIPE_WEBHOOK_KEY
+      )
 
-    data
+    if event['type'] == 'checkout.session.completed':
+        session = stripe.checkout.Session.retrieve(
+            event['data']['object']['id'],
+            expand=['line_items'],
+        )
+
+        tariff = get_object_or_404(Tariff, title=session.metadata.tariff)
+        updated_values = {
+            'tariff': tariff,
+            'requests_left': tariff.request_quantity
+        }
+
+        client, created = Client.objects.update_or_create(
+            chat_id=session.metadata.chat_id,
+            defaults=updated_values
+        )
+        if not created:
+            client.end = datetime.today() + relativedelta(months=1)
+            client.save()
+
+    return HttpResponse(status=HTTPStatus.OK)
