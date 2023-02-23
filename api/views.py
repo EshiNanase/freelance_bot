@@ -9,6 +9,7 @@ from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer,
 from drf_spectacular.utils import extend_schema
 
 
+@extend_schema(description='Проверка на клиента')
 @api_view(['GET'])
 def get_client(request, chat_id) -> Response:
     client = get_object_or_404(Client, chat_id=chat_id)
@@ -23,6 +24,7 @@ def get_client(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Проверка на фрилансера')
 @api_view(['GET'])
 def get_freelancer(request, chat_id) -> Response:
     freelancer = get_object_or_404(Freelancer, chat_id=chat_id)
@@ -35,6 +37,7 @@ def get_freelancer(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Список всех тарифов')
 @api_view(['GET'])
 def get_tariffs(request) -> Response:
     tariffs = list(Tariff.objects.all())
@@ -45,6 +48,7 @@ def get_tariffs(request) -> Response:
     )
 
 
+@extend_schema(description='Детальное отображение тарифа (тариф должен быть с большой буквы)')
 @api_view(['GET'])
 def get_detailed_tariff(request, tariff_name) -> Response:
     tariff = get_object_or_404(Tariff, title=tariff_name)
@@ -55,6 +59,7 @@ def get_detailed_tariff(request, tariff_name) -> Response:
     )
 
 
+@extend_schema(description='Детальное отображение заказа')
 @api_view(['GET'])
 def get_detailed_order(request, order_id) -> Response:
     order = get_object_or_404(Order, id=order_id)
@@ -65,7 +70,7 @@ def get_detailed_order(request, order_id) -> Response:
     )
 
 
-@extend_schema(request=ClientSerializer)
+@extend_schema(request=ClientSerializer, description='Создание фрилансера')
 @api_view(['POST'])
 def create_client(request) -> Response:
 
@@ -91,7 +96,7 @@ def create_client(request) -> Response:
     return Response(data=serializer.data, status=HTTPStatus.OK)
 
 
-@extend_schema(request=FreelancerSerializer)
+@extend_schema(request=FreelancerSerializer, description='Создание фрилансера')
 @api_view(['POST'])
 def create_freelancer(request) -> Response:
 
@@ -105,6 +110,7 @@ def create_freelancer(request) -> Response:
     return Response(data=serializer.data, status=HTTPStatus.OK)
 
 
+@extend_schema(description='Отображение всех заказов')
 @api_view(['GET'])
 def get_orders(request) -> Response:
 
@@ -118,7 +124,7 @@ def get_orders(request) -> Response:
     )
 
 
-@extend_schema(request=OrderCreateSerializer)
+@extend_schema(request=OrderCreateSerializer, description='Создание заказа')
 @api_view(['POST'])
 def create_order(request) -> Response:
 
@@ -142,7 +148,7 @@ def create_order(request) -> Response:
     )
 
 
-@extend_schema(request=OrderAppointFreelancerSerializer)
+@extend_schema(request=OrderAppointFreelancerSerializer, description='Назначение фрилансера на заказ')
 @api_view(['POST'])
 def appoint_freelancer(request) -> Response:
 
@@ -162,6 +168,7 @@ def appoint_freelancer(request) -> Response:
     )
 
 
+@extend_schema(description='Отображение заказов определенного фрилансера')
 @api_view(['GET'])
 def get_freelancer_orders(request, chat_id) -> Response:
 
@@ -175,6 +182,7 @@ def get_freelancer_orders(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Отображение заказов определенного клиента')
 @api_view(['GET'])
 def get_client_orders(request, chat_id) -> Response:
 
@@ -188,6 +196,8 @@ def get_client_orders(request, chat_id) -> Response:
     )
 
 
+# TODO Спросить про алгоритм фильтрации пяти случайных заказов
+@extend_schema(description='Отображение пяти случайных заказов')
 @api_view(['GET'])
 def find_orders(request) -> Response:
 
