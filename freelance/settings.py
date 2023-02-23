@@ -122,7 +122,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'static/'
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media/'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
@@ -135,3 +140,8 @@ REST_FRAMEWORK = {
 SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
 }
+
+# Stripe
+STRIPE_PUBLIC_KEY = 'pk_test_51ME735Dv53jLIWb1VgCBHlxKqik5TmGhlCrNl5GEop79wGHOTX8sBI3oAahNfsvYLml0PQzXF29TqyE38HbcbgHv009W7WgVx3'
+STRIPE_SECRET_KEY = 'sk_test_51ME735Dv53jLIWb1DIP8JYumUBw34Bq3sPyLDmvSFnvZIGWcInlzTnPaNZEzVXhqZp3wtQiRBZDDf8Zr9ZzDbd0O00VSoeITQw'
+STRIPE_WEBHOOK_KEY = 'whsec_16da8996a197f7093c2b9e7e51c8d91184ea08f75570efa00596438dc971cb5f'

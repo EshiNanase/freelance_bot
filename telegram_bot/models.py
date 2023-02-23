@@ -10,6 +10,12 @@ class Tariff(models.Model):
         max_length=256,
         verbose_name='Название'
     )
+    stripe_id = models.CharField(
+        null=True,
+        blank=True,
+        max_length=256,
+        verbose_name='ID в Stripe'
+    )
     description = models.TextField(
         verbose_name='Описание'
     )
@@ -86,6 +92,9 @@ class Freelancer(models.Model):
         verbose_name = 'Подрядчик'
         verbose_name_plural = 'Подрядчики'
 
+    def __str__(self):
+        return str(self.chat_id)
+
 
 class Order(models.Model):
 
@@ -94,7 +103,6 @@ class Order(models.Model):
         verbose_name='Название'
     )
     description = models.TextField(
-        max_length=256,
         verbose_name='Описание'
     )
     client = models.ForeignKey(
@@ -129,4 +137,22 @@ class Order(models.Model):
         verbose_name_plural = 'Заказы'
 
     def __str__(self):
-        return f'{self.title} - {self.client.chat_id}'
+        return f'{self.title}'
+
+
+class File(models.Model):
+    file = models.FileField(
+        verbose_name='Файл'
+    )
+    order = models.ForeignKey(
+        to=Order,
+        on_delete=models.CASCADE,
+        verbose_name='Заказ'
+    )
+
+    class Meta:
+        verbose_name = 'Файл к заказу'
+        verbose_name_plural = 'Файлы к заказу'
+
+    def __str__(self):
+        return self.file.name
