@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer
+from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer
 from drf_spectacular.utils import extend_schema
 
 
@@ -137,6 +137,53 @@ def create_order(request) -> Response:
     )
 
     return Response(
-        serializer.data,
+        data=serializer.data,
         status=HTTPStatus.OK
     )
+
+
+@extend_schema(request=OrderAppointFreelancerSerializer)
+@api_view(['POST'])
+def appoint_freelancer(request) -> Response:
+
+    data = request.data
+    serializer = OrderAppointFreelancerSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+
+    freelancer = get_object_or_404(Freelancer, chat_id=data['chat_id'])
+    Order.objects.filter(id=data['order_id']).update(
+        freelancer=freelancer,
+        put_into_action=datetime.today() + relativedelta(months=1)
+    )
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
+
+@api_view(['GET'])
+def get_freelancer_orders(request, chat_id) -> Response:
+
+    freelancer = get_object_or_404(Freelancer, chat_id=chat_id)
+    orders = list(Order.objects.filter(freelancer=freelancer))
+    serializer = OrderSerializer(orders, many=True)
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
+
+@api_view(['GET'])
+def get_client_orders(request, chat_id) -> Response:
+
+    client = get_object_or_404(Client, chat_id=chat_id)
+    orders = list(Order.objects.filter(client=client))
+    serializer = OrderSerializer(orders, many=True)
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
