@@ -1,6 +1,7 @@
 import argparse
 import logging
 import datetime
+import os
 import random
 import requests
 from enum import Enum, auto
@@ -25,6 +26,9 @@ class States(Enum):
     ORDERS = auto()
     RATE_CHOIСE = auto()
     PAYMENT = auto()
+    ORDER_NAME = auto()
+    ORDER_DESCRIPTION = auto()
+    ORDER_FILES = auto()
     VERIFICATE = auto()
     FRILANCER = auto()
     FRILANCER_ORDERS = auto()
@@ -55,8 +59,8 @@ def start(update, context):
                             Я бот сервисной поддержки для PHP
                             Укажи свой статус\.''')
 
-    message_keyboard = [["Клиент", "Исполнитель"],
-                        ['Написать администратору']]
+    message_keyboard = [["Клиент 😊", "Исполнитель 🥷"],
+                        ['Написать администратору ✍️']]
 
     markup = ReplyKeyboardMarkup(
         message_keyboard,
@@ -113,15 +117,14 @@ def check_client(update, context):
     url = f"http://127.0.0.1:8000/api/clients/{telegram_id}"
     response = requests.get(url)
 
-    # status = 1
-
     if response.ok:
-    # if status == 1:
         rest_days = response.json()['days_left']
         rest_orders = response.json()['requests_left']
         rate_name = response.json()['tariff_title']
-        user = update.effective_user
+        user_fullname = str(update.message.from_user['first_name']) + ' ' + str(
+            update.message.from_user['last_name'])
         greetings = dedent(f'''
+                        {user_fullname} вот информация по вашему тарифу:
                         Ваш тариф "{rate_name}"
                         Тариф действует до {rest_days}
                         В вашем тарифе осталось {rest_orders} запросов.''')
@@ -149,10 +152,6 @@ def check_client(update, context):
     rates.extend(["Назад"])
     message_keyboard = list(chunked(rates, 2))
 
-    # message_keyboard = [
-    #     ['Эконом', 'Продвинутый'],
-    #     ['VIP', 'Назад']
-    # ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
@@ -186,7 +185,6 @@ def chooze_rate(update, context):
     response.raise_for_status()
     rate_name = response.json()['title']
     rate_description = response.json()['description']
-    # rate_description = 'бла бла бла'
     rate_quantity = response.json()['request_quantity']
     rate_price = response.json()['price']
 
@@ -212,8 +210,6 @@ def chooze_rate(update, context):
     update.message.reply_text(text=rate_message,
                               reply_markup=markup,
                               parse_mode=ParseMode.HTML)
-    # update.message.reply_text(text='тариф выбран',
-    #                           reply_markup=markup)
     return States.RATE_CHOIСE
 
 
@@ -348,8 +344,94 @@ def send_new_order(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Заказ', reply_markup=markup)
-    return States.PRICE
+    update.message.reply_text(text='Укажите короткое имя заказа, чтобы потом его легче было искать',
+                              reply_markup=markup)
+    return States.ORDER_NAME
+
+
+def create_order_name(update, context):
+    context.user_data['order_name'] = update.message.text
+    message_keyboard = [
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='Опишите суть заказа',
+                              reply_markup=markup)
+    return States.ORDER_DESCRIPTION
+
+
+def create_order_description(update, context):
+    context.user_data['order_description'] = update.message.text
+    message_keyboard = [
+        ['Назад', 'Пропустить']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='Прикрепите файлы, если нужно',
+                              reply_markup=markup)
+    return States.ORDER_FILES
+
+
+def add_file_to_order(update, context):
+    telegram_id = context.user_data["telegram_id"]
+    if not os.path.exists(f'media/{telegram_id}'):
+        os.mkdir(f'media/{telegram_id}')
+    document_name = update.message.document.file_name
+    document = update.message.document.get_file()
+    document.download(f'media/{telegram_id}/{document_name}')
+
+    message_keyboard = [
+        ['Пропустить']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    message = 'Вы прикрепили файл к заказу, если нужно добавить еще файлы - добавляйте, либо' \
+              'нажмите "Пропустить" для формирования и отправки заказа'
+    update.message.reply_text(text=message,
+                              reply_markup=markup)
+    return States.ORDER_FILES
+
+
+def create_order(update, context):
+    order_name = context.user_data['order_name']
+    order_description = context.user_data['order_description']
+    telegram_id = context.user_data["telegram_id"]
+    payload = {
+        'title': order_name,
+        'description': order_description,
+        'chat_id': telegram_id,
+    }
+    call_api_post("api/order/add", payload)
+
+    message_keyboard = [
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    message = dedent("""\
+        Вы успешно создали заказ. Ожидайте, в ближайшее время с вами свяжется исполнитель ✌️
+
+        А пока я вам спою "ля-ля-ля, духаст мищь"
+        Если вам понравилась песня, можете задонатить по номеру телефона +79805677474.
+        
+        А если нет, то нажмите "Назад"
+        """).replace("  ", "")
+    update.message.reply_text(text=message,
+                              reply_markup=markup)
+    return States.ORDER_FILES
 
 
 def show_orders(update, context):
@@ -422,9 +504,9 @@ if __name__ == '__main__':
         entry_points=[CommandHandler("start", start)],
         states={
             States.START: [
-                MessageHandler(Filters.text("Клиент"), check_client),
-                MessageHandler(Filters.text("Исполнитель"), check_frilancer),
-                MessageHandler(Filters.text('Написать администратору'), message_to_admin),
+                MessageHandler(Filters.text("Клиент 😊"), check_client),
+                MessageHandler(Filters.text("Исполнитель 🥷"), check_frilancer),
+                MessageHandler(Filters.text('Написать администратору ✍️'), message_to_admin),
             ],
             States.ADMIN: [
                 MessageHandler(Filters.text, send_to_admin),
@@ -454,6 +536,19 @@ if __name__ == '__main__':
             States.ORDERS: [
                 MessageHandler(Filters.text("Новый заказ"), send_new_order),
                 MessageHandler(Filters.text("Мои заказы"), show_orders),
+            ],
+            States.ORDER_NAME: [
+                MessageHandler(Filters.text("Назад"), send_new_order),
+                MessageHandler(Filters.text, create_order_name),
+            ],
+            States.ORDER_DESCRIPTION: [
+                MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(Filters.text, create_order_description),
+            ],
+            States.ORDER_FILES: [
+                MessageHandler(Filters.text('Пропустить'), create_order),
+                MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(Filters.document, add_file_to_order),
             ],
             States.RATE_CHOIСE: [
                 MessageHandler(Filters.text("Выбрать"), send_payment),
