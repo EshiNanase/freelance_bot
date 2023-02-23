@@ -187,3 +187,14 @@ def get_client_orders(request, chat_id) -> Response:
         status=HTTPStatus.OK
     )
 
+
+@api_view(['GET'])
+def find_orders(request) -> Response:
+
+    orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))[:5]
+    serializer = OrderSerializer(orders, many=True)
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
