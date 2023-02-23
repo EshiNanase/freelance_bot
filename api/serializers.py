@@ -40,3 +40,9 @@ class OrderCreateSerializer(serializers.Serializer):
     title = serializers.CharField()
     description = serializers.CharField()
     chat_id = serializers.IntegerField()
+
+
+class OrderAppointFreelancerSerializer(serializers.Serializer):
+
+    chat_id = serializers.IntegerField()
+    order_id = serializers.IntegerField()

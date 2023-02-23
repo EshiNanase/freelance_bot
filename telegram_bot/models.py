@@ -86,6 +86,9 @@ class Freelancer(models.Model):
         verbose_name = 'Подрядчик'
         verbose_name_plural = 'Подрядчики'
 
+    def __str__(self):
+        return str(self.chat_id)
+
 
 class Order(models.Model):
 
@@ -129,4 +132,4 @@ class Order(models.Model):
         verbose_name_plural = 'Заказы'
 
     def __str__(self):
-        return f'{self.title} - {self.client.chat_id}'
+        return f'{self.title}'

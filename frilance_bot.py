@@ -7,6 +7,7 @@ from enum import Enum, auto
 from textwrap import dedent
 from telegram import ParseMode
 from more_itertools import chunked
+from itertools import cycle
 
 import environs
 from telegram import ReplyKeyboardMarkup
@@ -24,6 +25,9 @@ class States(Enum):
     ORDERS = auto()
     RATE_CHOIСE = auto()
     PAYMENT = auto()
+    VERIFICATE = auto()
+    FRILANCER = auto()
+    FRILANCER_ORDERS = auto()
 
 
 class BotData:
@@ -238,7 +242,65 @@ def add_user(update, context):
 
 
 def check_frilancer(update, context):
+    chat_id = update.effective_message.chat_id
+    print(chat_id)
+    url = f"http://127.0.0.1:8000/api/freelancers/{chat_id}"
+    response = requests.get(url)
+    x = response.status_code
+    if response.status_code == 404:
+        message_keyboard = [
+            ['Пройти верификацию']
+        ]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        update.message.reply_text(text='Что-бы принимать заказы вам нужно сначала пройти верификацию, '
+                                       'нажмите кнопку "Пройти верификацию"',
+                                  reply_markup=markup)
+        return States.VERIFICATE
     message_keyboard = [
+        ['Выбрать заказ', 'Мои заказы']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='Выберете следующее действие:',
+                              reply_markup=markup)
+
+    return States.FRILANCER
+
+
+def verify_freelancer(update, context):
+    chat_id = update.effective_message.chat_id
+    endpoint = "api/freelancers/add"
+    payload = {
+        "chat_id": chat_id,
+    }
+    call_api_post(endpoint, payload)
+    message_keyboard = [["Клиент", "Исполнитель"],
+                        ['Написать администратору']]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='Поздравляем, вы прошли верификацию, теперь вы можете брать заказы.',
+                              reply_markup=markup)
+    return States.START
+
+
+def check(update, context):
+
+    order_id = update.message.text.replace('/replay_', '')
+    endpoint = f'api/order/{order_id}'
+    order = call_api_get(endpoint)
+    message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
+    message_keyboard = [
+        [f'Взять в работу заказ №{order_id}'],
         ['Назад']
     ]
     markup = ReplyKeyboardMarkup(
@@ -246,8 +308,35 @@ def check_frilancer(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Фрилансер', reply_markup=markup)
-    return States.PRICE
+    update.message.reply_text(text=message, reply_markup=markup)
+    return States.FRILANCER_ORDERS
+
+
+def add_orders_to_frilancer(update, context):
+    chat_id = update.effective_message.chat_id
+    order_id = update.message.text.replace('Взять в работу заказ №', '')
+    print(order_id)
+    endpoint = f'api/order/{order_id}'
+    order = call_api_get(endpoint)
+
+    endpoint = f'api/order/add'
+    payload = {
+        "title": order["title"],
+        "description": order["description"],
+        "chat_id": chat_id
+    }
+    call_api_post(endpoint, payload)
+    message_keyboard = [
+        ['Взять в работу'],
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text="Заказ взят в работу", reply_markup=markup)
+    return States.FRILANCER_ORDERS
 
 
 def send_new_order(update, context):
@@ -264,6 +353,7 @@ def send_new_order(update, context):
 
 
 def show_orders(update, context):
+    orders = call_api_get('api/all_orders')
     message_keyboard = [
         ['Назад']
     ]
@@ -274,6 +364,39 @@ def show_orders(update, context):
     )
     update.message.reply_text(text='Мои заказы', reply_markup=markup)
     return States.PRICE
+
+
+def func_chunks_generators(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+five = ''
+orders_by_five_elements = ''
+def show_five_orders(update, context):
+    global five
+    global orders_by_five_elements
+    if five == '':
+        endpoint = 'api/all_orders'
+        orders = call_api_get(endpoint)
+        orders_title = [order for order in orders]
+        orders_by_five_elements = cycle(func_chunks_generators(orders_title, 5))
+        five = next(orders_by_five_elements)
+    else:
+        five = next(orders_by_five_elements)
+
+    ps = [
+        f'/replay_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five)]
+    messages = ' '.join(ps)
+    message_keyboard = [
+        ['Назад', 'Следующие заказы']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=messages, reply_markup=markup)
+    return States.FRILANCER
 
 
 # def error(update, context):
@@ -305,6 +428,24 @@ if __name__ == '__main__':
             ],
             States.ADMIN: [
                 MessageHandler(Filters.text, send_to_admin),
+            ],
+            States.VERIFICATE: [
+                MessageHandler(Filters.text('Пройти верификацию'), verify_freelancer),
+                MessageHandler(Filters.text, start),
+            ],
+            States.FRILANCER: [
+                MessageHandler(Filters.command(False), check),
+                CommandHandler('replay', check),
+                MessageHandler(Filters.text('Выбрать заказ'), show_five_orders),
+                MessageHandler(Filters.text('Мои заказы'), show_five_orders),
+                MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
+                MessageHandler(Filters.text('Взять в работу'), add_orders_to_frilancer),
+
+                MessageHandler(Filters.text, start),
+            ],
+            States.FRILANCER_ORDERS: [
+                MessageHandler(Filters.text('Назад'), show_five_orders),
+                MessageHandler(Filters.text, add_orders_to_frilancer),
             ],
             States.PRICE: [
                 MessageHandler(Filters.text("Назад"), start),
