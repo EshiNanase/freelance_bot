@@ -1,11 +1,6 @@
 from django.db import models
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import requests
-import mimetypes
-from tempfile import NamedTemporaryFile
-from urllib.request import urlopen
-from django.core.files.base import File as Django_File
 
 
 class Tariff(models.Model):
@@ -14,6 +9,12 @@ class Tariff(models.Model):
         unique=True,
         max_length=256,
         verbose_name='Название'
+    )
+    stripe_id = models.CharField(
+        null=True,
+        blank=True,
+        max_length=256,
+        verbose_name='ID в Stripe'
     )
     description = models.TextField(
         verbose_name='Описание'

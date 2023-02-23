@@ -238,5 +238,12 @@ def finish_order(request) -> Response:
         status=HTTPStatus.OK
     )
 
+
 # TODO Спросить менеджмент заказов со стороны клиента и фрилансера
 # TODO Спросить про возможность "закрепить подрядчика за собой"
+
+
+@api_view(['POST'])
+def fullfill_order(request) -> Response:
+
+    data

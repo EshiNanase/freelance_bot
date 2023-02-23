@@ -9,7 +9,7 @@ from textwrap import dedent
 from telegram import ParseMode
 from more_itertools import chunked
 from itertools import cycle
-
+from payment import send_payment_link
 import environs
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
@@ -222,7 +222,9 @@ def send_payment(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='здесь информация по оплате и прикручена система оплаты',
+    chat_id = '???'
+    tariff = '???'
+    update.message.reply_text(text=send_payment_link(chat_id, tariff),
                               reply_markup=markup)
     return States.PAYMENT
 
