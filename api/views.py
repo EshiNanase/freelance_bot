@@ -1,12 +1,13 @@
-from telegram_bot.models import Client, Tariff, Order, Freelancer
+from telegram_bot.models import Client, Tariff, Order, Freelancer, File
 from django.shortcuts import get_object_or_404
 from http import HTTPStatus
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer
+from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer, OrderFinishSerializer
 from drf_spectacular.utils import extend_schema
+from django.db import transaction
 
 
 @extend_schema(description='Проверка на клиента')
@@ -124,6 +125,7 @@ def get_orders(request) -> Response:
     )
 
 
+@transaction.atomic
 @extend_schema(request=OrderCreateSerializer, description='Создание заказа')
 @api_view(['POST'])
 def create_order(request) -> Response:
@@ -136,11 +138,19 @@ def create_order(request) -> Response:
     client.requests_left -= 1
     client.save()
 
-    Order.objects.create(
+    order = Order.objects.create(
         title=data['title'],
         description=data['description'],
         client=client
     )
+
+    for file in data['files']:
+        file, created = File.objects.get_or_create(
+            order=order,
+            file_url=file,
+        )
+        file.get_file_from_url()
+        file.save()
 
     return Response(
         data=serializer.data,
@@ -203,6 +213,24 @@ def find_orders(request) -> Response:
 
     orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))[:5]
     serializer = OrderSerializer(orders, many=True)
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
+
+# TODO Спросить про критерии завершенного заказа
+@extend_schema(request=OrderFinishSerializer, description='Завершить заказ')
+@api_view(['POST'])
+def finish_order(request) -> Response:
+
+    data = request.data
+    serializer = OrderFinishSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    Order.objects.filter(id=data['order_id']).update(
+        finished=datetime.today() + relativedelta(months=1)
+    )
 
     return Response(
         data=serializer.data,
