@@ -41,7 +41,7 @@ class OrderCreateSerializer(serializers.Serializer):
     description = serializers.CharField()
     chat_id = serializers.IntegerField()
     files = serializers.ListSerializer(
-        child=serializers.URLField(),
+        child=serializers.CharField(),
         required=False
     )
 

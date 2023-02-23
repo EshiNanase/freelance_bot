@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer, OrderFinishSerializer
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
+from rest_framework.pagination import PageNumberPagination
 
 
 @extend_schema(description='Проверка на клиента')
@@ -146,12 +147,11 @@ def create_order(request) -> Response:
 
     if data.get('files'):
         for file in data['files']:
-            file, created = File.objects.get_or_create(
+            obj, created = File.objects.get_or_create(
                 order=order,
-                file_url=file,
             )
-            file.get_file_from_url()
-            file.save()
+            obj.file.name = f'media/{file}'
+            obj.save()
 
     return Response(
         data=serializer.data,
@@ -212,13 +212,13 @@ def get_client_orders(request, chat_id) -> Response:
 @api_view(['GET'])
 def find_orders(request) -> Response:
 
-    orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))[:5]
-    serializer = OrderSerializer(orders, many=True)
+    paginator = PageNumberPagination()
+    paginator.page_size = 5
+    orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))
+    orders_result = paginator.paginate_queryset(orders, request)
+    serializer = OrderSerializer(orders_result, many=True)
 
-    return Response(
-        data=serializer.data,
-        status=HTTPStatus.OK
-    )
+    return paginator.get_paginated_response(serializer.data)
 
 
 # TODO Спросить про критерии завершенного заказа
@@ -239,3 +239,4 @@ def finish_order(request) -> Response:
     )
 
 # TODO Спросить менеджмент заказов со стороны клиента и фрилансера
+# TODO Спросить про возможность "закрепить подрядчика за собой"
