@@ -1,5 +1,11 @@
 from django.contrib import admin
-from telegram_bot.models import Administrator, Client, Freelancer, Tariff, Order
+from telegram_bot.models import Administrator, Client, Freelancer, Tariff, Order, File
+
+
+class FileTabularInLine(admin.TabularInline):
+
+    model = File
+    extra = 0
 
 
 @admin.register(Administrator)
@@ -24,5 +30,8 @@ class TariffAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
+    inlines = [
+        FileTabularInLine
+    ]
     readonly_fields = ('id',)
     fields = ['title', 'id', 'description', 'client', 'freelancer', 'published', 'put_into_action', 'finished']

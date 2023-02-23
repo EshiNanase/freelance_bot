@@ -1,14 +1,16 @@
-from telegram_bot.models import Client, Tariff, Order, Freelancer
+from telegram_bot.models import Client, Tariff, Order, Freelancer, File
 from django.shortcuts import get_object_or_404
 from http import HTTPStatus
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer
+from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer, OrderFinishSerializer
 from drf_spectacular.utils import extend_schema
+from django.db import transaction
 
 
+@extend_schema(description='Проверка на клиента')
 @api_view(['GET'])
 def get_client(request, chat_id) -> Response:
     client = get_object_or_404(Client, chat_id=chat_id)
@@ -23,6 +25,7 @@ def get_client(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Проверка на фрилансера')
 @api_view(['GET'])
 def get_freelancer(request, chat_id) -> Response:
     freelancer = get_object_or_404(Freelancer, chat_id=chat_id)
@@ -35,6 +38,7 @@ def get_freelancer(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Список всех тарифов')
 @api_view(['GET'])
 def get_tariffs(request) -> Response:
     tariffs = list(Tariff.objects.all())
@@ -45,6 +49,7 @@ def get_tariffs(request) -> Response:
     )
 
 
+@extend_schema(description='Детальное отображение тарифа (тариф должен быть с большой буквы)')
 @api_view(['GET'])
 def get_detailed_tariff(request, tariff_name) -> Response:
     tariff = get_object_or_404(Tariff, title=tariff_name)
@@ -55,6 +60,7 @@ def get_detailed_tariff(request, tariff_name) -> Response:
     )
 
 
+@extend_schema(description='Детальное отображение заказа')
 @api_view(['GET'])
 def get_detailed_order(request, order_id) -> Response:
     order = get_object_or_404(Order, id=order_id)
@@ -65,7 +71,7 @@ def get_detailed_order(request, order_id) -> Response:
     )
 
 
-@extend_schema(request=ClientSerializer)
+@extend_schema(request=ClientSerializer, description='Создание фрилансера')
 @api_view(['POST'])
 def create_client(request) -> Response:
 
@@ -91,7 +97,7 @@ def create_client(request) -> Response:
     return Response(data=serializer.data, status=HTTPStatus.OK)
 
 
-@extend_schema(request=FreelancerSerializer)
+@extend_schema(request=FreelancerSerializer, description='Создание фрилансера')
 @api_view(['POST'])
 def create_freelancer(request) -> Response:
 
@@ -105,6 +111,7 @@ def create_freelancer(request) -> Response:
     return Response(data=serializer.data, status=HTTPStatus.OK)
 
 
+@extend_schema(description='Отображение всех заказов')
 @api_view(['GET'])
 def get_orders(request) -> Response:
 
@@ -118,7 +125,8 @@ def get_orders(request) -> Response:
     )
 
 
-@extend_schema(request=OrderCreateSerializer)
+@transaction.atomic
+@extend_schema(request=OrderCreateSerializer, description='Создание заказа')
 @api_view(['POST'])
 def create_order(request) -> Response:
 
@@ -130,11 +138,19 @@ def create_order(request) -> Response:
     client.requests_left -= 1
     client.save()
 
-    Order.objects.create(
+    order = Order.objects.create(
         title=data['title'],
         description=data['description'],
         client=client
     )
+
+    for file in data['files']:
+        file, created = File.objects.get_or_create(
+            order=order,
+            file_url=file,
+        )
+        file.get_file_from_url()
+        file.save()
 
     return Response(
         data=serializer.data,
@@ -142,7 +158,7 @@ def create_order(request) -> Response:
     )
 
 
-@extend_schema(request=OrderAppointFreelancerSerializer)
+@extend_schema(request=OrderAppointFreelancerSerializer, description='Назначение фрилансера на заказ')
 @api_view(['POST'])
 def appoint_freelancer(request) -> Response:
 
@@ -162,6 +178,7 @@ def appoint_freelancer(request) -> Response:
     )
 
 
+@extend_schema(description='Отображение заказов определенного фрилансера')
 @api_view(['GET'])
 def get_freelancer_orders(request, chat_id) -> Response:
 
@@ -175,6 +192,7 @@ def get_freelancer_orders(request, chat_id) -> Response:
     )
 
 
+@extend_schema(description='Отображение заказов определенного клиента')
 @api_view(['GET'])
 def get_client_orders(request, chat_id) -> Response:
 
@@ -188,11 +206,31 @@ def get_client_orders(request, chat_id) -> Response:
     )
 
 
+# TODO Спросить про алгоритм фильтрации пяти случайных заказов
+@extend_schema(description='Отображение пяти случайных заказов')
 @api_view(['GET'])
 def find_orders(request) -> Response:
 
     orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))[:5]
     serializer = OrderSerializer(orders, many=True)
+
+    return Response(
+        data=serializer.data,
+        status=HTTPStatus.OK
+    )
+
+
+# TODO Спросить про критерии завершенного заказа
+@extend_schema(request=OrderFinishSerializer, description='Завершить заказ')
+@api_view(['POST'])
+def finish_order(request) -> Response:
+
+    data = request.data
+    serializer = OrderFinishSerializer(data=data)
+    serializer.is_valid(raise_exception=True)
+    Order.objects.filter(id=data['order_id']).update(
+        finished=datetime.today() + relativedelta(months=1)
+    )
 
     return Response(
         data=serializer.data,

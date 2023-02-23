@@ -1,6 +1,11 @@
 from django.db import models
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import requests
+import mimetypes
+from tempfile import NamedTemporaryFile
+from urllib.request import urlopen
+from django.core.files.base import File as Django_File
 
 
 class Tariff(models.Model):
@@ -97,7 +102,6 @@ class Order(models.Model):
         verbose_name='Название'
     )
     description = models.TextField(
-        max_length=256,
         verbose_name='Описание'
     )
     client = models.ForeignKey(
@@ -133,3 +137,37 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.title}'
+
+
+class File(models.Model):
+    file = models.FileField(
+        verbose_name='Файл'
+    )
+    file_url = models.URLField(
+        blank=True,
+        null=True,
+        verbose_name='Ссылка на файл'
+    )
+    order = models.ForeignKey(
+        to=Order,
+        on_delete=models.CASCADE,
+        verbose_name='Заказ'
+    )
+
+    def get_file_from_url(self):
+        response = requests.get(self.file_url)
+        response.raise_for_status()
+        content_type = response.headers['content-type']
+        extension = mimetypes.guess_extension(content_type)
+
+        file_tmp = NamedTemporaryFile(delete=True)
+        file_tmp.write(response.content)
+        file = Django_File(file_tmp)
+        self.file.save(f'{self.order.title}{extension}', file)
+
+    class Meta:
+        verbose_name = 'Файл к заказу'
+        verbose_name_plural = 'Файлы к заказу'
+
+    def __str__(self):
+        return self.file.name
