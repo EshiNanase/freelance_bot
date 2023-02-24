@@ -1,11 +1,11 @@
-from telegram_bot.models import Client, Tariff, Order, Freelancer, File
+from telegram_bot.models import Client, Tariff, Order, Freelancer
 from django.shortcuts import get_object_or_404
 from http import HTTPStatus
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer, OrderFinishSerializer
+from api.serializers import ClientSerializer, OrderSerializer, TariffSerializer, FreelancerSerializer, OrderCreateSerializer, OrderAppointFreelancerSerializer, OrderFinishSerializer, ContactOtherSideSerializer
 from drf_spectacular.utils import extend_schema
 from django.db import transaction
 from rest_framework.pagination import PageNumberPagination
@@ -13,8 +13,6 @@ import stripe
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http.response import HttpResponse
-from django.db.models import Subquery, OuterRef
-from django.db import models
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -72,7 +70,9 @@ def get_detailed_tariff(request, tariff_name) -> Response:
 @extend_schema(description='Детальное отображение заказа')
 @api_view(['GET'])
 def get_detailed_order(request, order_id) -> Response:
-    order = get_object_or_404(Order, id=order_id)
+
+    order = Order.objects.get(id=order_id)
+
     serializer = OrderSerializer(order)
     return Response(
         data=serializer.data,
@@ -125,10 +125,8 @@ def create_freelancer(request) -> Response:
 @api_view(['GET'])
 def get_orders(request) -> Response:
 
-    files = File.objects.filter(order=OuterRef('id')).all().values('file')
-    orders = Order.objects.all().annotate(files=Subquery(files, output_field=models.CharField()))
-    for order in orders:
-        print(order.id, order.files)
+    orders = Order.objects.all()
+
     serializer = OrderSerializer(orders, many=True)
     response = serializer.data
 
@@ -158,11 +156,8 @@ def create_order(request) -> Response:
     )
     if data.get('files'):
         for file in data['files']:
-            obj = File.objects.create(
-                order=order,
-            )
-            obj.file.path = file
-            obj.save()
+            order.files.append(file)
+            order.save()
 
     return Response(
         data=serializer.data,
@@ -195,7 +190,8 @@ def appoint_freelancer(request) -> Response:
 def get_freelancer_orders(request, chat_id) -> Response:
 
     freelancer = get_object_or_404(Freelancer, chat_id=chat_id)
-    orders = list(Order.objects.filter(freelancer=freelancer))
+    orders = Order.objects.filter(freelancer=freelancer, finished__isnull=True)
+
     serializer = OrderSerializer(orders, many=True)
 
     return Response(
@@ -209,7 +205,8 @@ def get_freelancer_orders(request, chat_id) -> Response:
 def get_client_orders(request, chat_id) -> Response:
 
     client = get_object_or_404(Client, chat_id=chat_id)
-    orders = list(Order.objects.filter(client=client))
+    orders = Order.objects.filter(client=client)
+
     serializer = OrderSerializer(orders, many=True)
 
     return Response(
@@ -225,7 +222,7 @@ def find_orders(request) -> Response:
 
     paginator = PageNumberPagination()
     paginator.page_size = 5
-    orders = list(Order.objects.filter(freelancer__isnull=True).order_by('-client__tariff'))
+    orders = Order.objects.filter(freelancer__isnull=True).all().order_by('-client__tariff')
     orders_result = paginator.paginate_queryset(orders, request)
     serializer = OrderSerializer(orders_result, many=True)
 
@@ -252,6 +249,23 @@ def finish_order(request) -> Response:
 
 # TODO Спросить менеджмент заказов со стороны клиента и фрилансера
 # TODO Спросить про возможность "закрепить подрядчика за собой"
+
+
+@extend_schema(request=ContactOtherSideSerializer, description='Пообщаться с другой стороной')
+@api_view(['POST'])
+def contact_other_side(request) -> Response:
+
+    serializer = ContactOtherSideSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.data
+
+    order = get_object_or_404(Order, id=data['order_id'])
+    order.dialogue[data['side']].append(data['message'])
+    order.save()
+
+    return Response(
+        status=HTTPStatus.OK
+    )
 
 
 @csrf_exempt
