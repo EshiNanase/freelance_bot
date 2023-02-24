@@ -1,19 +1,17 @@
-import argparse
 import logging
 import datetime
 import os
-import random
 import requests
 from enum import Enum, auto
 from textwrap import dedent
 from telegram import ParseMode
 from more_itertools import chunked
 from itertools import cycle
-from payment import send_payment_link
 import environs
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
+from telegram_bot.payment import send_payment_link
 
 
 logger = logging.getLogger(__name__)
