@@ -12,6 +12,7 @@ from telegram import ReplyKeyboardMarkup
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
 from telegram.ext import MessageFilter
+from telegram_bot.payment import send_payment_link
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ class States(Enum):
     ORDER_NAME = auto()
     ORDER_DESCRIPTION = auto()
     ORDER_FILES = auto()
+    CLIENT_ORDERS = auto()
     VERIFICATE = auto()
     FRILANCER = auto()
     FRILANCER_ORDERS = auto()
@@ -503,18 +505,39 @@ def create_order(update, context):
 
 
 def show_orders(update, context):
-    orders = call_api_get('api/all_orders')
+    chat_id = context.user_data["telegram_id"]
+    url = f'api/clients/{chat_id}/orders'
+    orders = call_api_get(url)
+    ps = [
+        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(orders)]
+    messages = ' '.join(ps)
     message_keyboard = [
-        ['Назад']
+        ['Назад', 'Главное меню']
     ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Мои заказы', reply_markup=markup)
-    return States.PRICE
+    update.message.reply_text(text=messages, reply_markup=markup)
+    return States.CLIENT_ORDERS
 
+def check_client_order(update, context):
+
+    order_id = update.message.text.replace('/order_', '')
+    endpoint = f'api/order/{order_id}'
+    order = call_api_get(endpoint)
+    message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
+    message_keyboard = [
+            ['Назад']
+        ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message, reply_markup=markup)
+    return States.CLIENT_ORDERS
 
 def func_chunks_generators(lst, n):
     for i in range(0, len(lst), n):
@@ -672,6 +695,12 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Пропустить'), create_order),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(Filters.document, add_file_to_order),
+            ],
+            States.CLIENT_ORDERS: [
+                MessageHandler(Filters.command(False), check_client_order),
+                CommandHandler('order', check_client_order),
+                MessageHandler(Filters.text('Назад'), check_client),
+                MessageHandler(Filters.text('Главное меню'), start),
             ],
             States.RATE_CHOIСE: [
                 MessageHandler(Filters.text("Выбрать"), send_payment),
