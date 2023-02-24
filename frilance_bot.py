@@ -1,22 +1,28 @@
-import argparse
 import logging
 import datetime
 import os
-import random
 import requests
 from enum import Enum, auto
 from textwrap import dedent
 from telegram import ParseMode
 from more_itertools import chunked
 from itertools import cycle
-from payment import send_payment_link
 import environs
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
+from telegram.ext import MessageFilter
 
 
 logger = logging.getLogger(__name__)
+
+
+class FilterAwesome(MessageFilter):
+    def filter(self, message):
+        return 'Взять в работу' in message.text or 'Подтвердить выполнение заказа' in message.text
+
+
+check_do_to_work = FilterAwesome()
 
 
 class States(Enum):
@@ -633,7 +639,7 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Назад'), show_five_orders),
                 MessageHandler(Filters.text('Показать все заказы в работе'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
-                MessageHandler(Filters.text, add_orders_to_frilancer),
+                MessageHandler(check_do_to_work, add_orders_to_frilancer),
             ],
             States.ORDERS_PAGINATOR: [
                 MessageHandler(Filters.command(False), check),
@@ -652,7 +658,7 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text("Мои заказы"), show_orders),
                 MessageHandler(Filters.text('Назад'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
-                MessageHandler(Filters.text, finish_orders),
+                MessageHandler(check_do_to_work, finish_orders),
             ],
             States.ORDER_NAME: [
                 MessageHandler(Filters.text("Назад"), send_new_order),

@@ -1,7 +1,17 @@
 import stripe
+import requests
+# FIXME
+from freelance import settings
+
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def send_payment_link(chat_id, tariff, stripe_id):
+def send_payment_link(chat_id, tariff):
+
+    url = f'http://127.0.0.1:8000/api/tariff/{tariff}'
+    response = requests.get(url)
+    response.raise_for_status()
+    stripe_id = response.json()['stripe_id']
 
     checkout_session = stripe.checkout.Session.create(
                 line_items=[
@@ -15,3 +25,4 @@ def send_payment_link(chat_id, tariff, stripe_id):
                 success_url='https://www.youtube.com/watch?v=cuX5QQXbLDQ'
             )
     return checkout_session.url
+

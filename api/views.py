@@ -156,7 +156,7 @@ def create_order(request) -> Response:
             obj, created = File.objects.get_or_create(
                 order=order,
             )
-            obj.file.name = f'media/{file}'
+            obj.file.name = f'{file}'
             obj.save()
 
     return Response(
