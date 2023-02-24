@@ -235,8 +235,6 @@ def send_payment(update, context):
     tariff = context.user_data["rate"]
     update.message.reply_text(text=send_payment_link(chat_id, tariff),
                               reply_markup=markup)
-    # update.message.reply_text(text='жми оплатить',
-    #                           reply_markup=markup)
     return States.PAYMENT
 
 
@@ -424,7 +422,7 @@ def create_order_description(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Прикрепите файлы, если нужно',
+    update.message.reply_text(text='Прикрепите файлы, если нужно (при отправки файла в ТГ уберите галочку сжатие)',
                               reply_markup=markup)
     return States.ORDER_FILES
 
@@ -470,7 +468,7 @@ def create_order(update, context):
         order_files = []
         files_name = os.listdir(f'media/{telegram_id}/{order_name}')
         for name in files_name:
-            order_files.append(f'media/{telegram_id}/{order_name}/{name}')
+            order_files.append(f'{telegram_id}/{order_name}/{name}')
 
     else:
         order_files = []
@@ -480,7 +478,6 @@ def create_order(update, context):
         'chat_id': telegram_id,
         'files': order_files
     }
-    print(payload)
     call_api_post("api/order/add", payload)
 
     message_keyboard = [
