@@ -93,7 +93,7 @@ def send_to_admin(update, context):
     )
     update.message.chat.id = BotData.ADMIN_CHAT_ID
     menu_msg = dedent(f"""\
-                это видит флорист
+                это видит администратор
                 <b>ИД клиента:</b>
                 {telegram_id}
                 <b>Запрос:</b>
@@ -244,7 +244,6 @@ def add_user(update, context):
 
 def check_frilancer(update, context):
     chat_id = update.effective_message.chat_id
-    print(chat_id)
     url = f"http://127.0.0.1:8000/api/freelancers/{chat_id}"
     response = requests.get(url)
     x = response.status_code
