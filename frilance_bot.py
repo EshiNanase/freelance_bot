@@ -231,10 +231,10 @@ def send_payment(update, context):
     )
     chat_id = context.user_data["telegram_id"]
     tariff = context.user_data["rate"]
-    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
-    #                           reply_markup=markup)
-    update.message.reply_text(text='жми оплатить',
+    update.message.reply_text(text=send_payment_link(chat_id, tariff),
                               reply_markup=markup)
+    # update.message.reply_text(text='жми оплатить',
+    #                           reply_markup=markup)
     return States.PAYMENT
 
 
