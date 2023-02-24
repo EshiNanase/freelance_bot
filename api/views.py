@@ -137,9 +137,9 @@ def get_orders(request) -> Response:
 @api_view(['POST'])
 def create_order(request) -> Response:
 
-    data = request.data
-    serializer = OrderCreateSerializer(data=data)
+    serializer = OrderCreateSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    data = serializer.data
 
     client = get_object_or_404(Client, chat_id=data['chat_id'])
     client.requests_left -= 1
@@ -150,10 +150,9 @@ def create_order(request) -> Response:
         description=data['description'],
         client=client
     )
-
     if data.get('files'):
         for file in data['files']:
-            obj, created = File.objects.get_or_create(
+            obj = File.objects.create(
                 order=order,
             )
             obj.file.name = f'{file}'

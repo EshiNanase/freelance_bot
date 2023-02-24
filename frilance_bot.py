@@ -473,13 +473,13 @@ def create_order(update, context):
 
     else:
         order_files = []
-
     payload = {
         'title': order_name,
         'description': order_description,
         'chat_id': telegram_id,
         'files': order_files
     }
+    print(payload)
     call_api_post("api/order/add", payload)
 
     message_keyboard = [
