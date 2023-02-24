@@ -159,20 +159,20 @@ def check_client(update, context):
         one_time_keyboard=True
     )
 
-    with open('documents/Тарифы.pdf', 'rb') as image:
+    with open('documents/Преимущества.pdf', 'rb') as image:
         price_pdf = image.read()
 
     greeting_msg = dedent("""\
         Привет!✌️
 
-        Вы еще не зарегестрированы на нашем сайте. Для регистрации ознакомьтесь с нашим предложением\
-         и выберите подходящий тариф
+        Вы еще не зарегестрированы на нашем сайте. Для регистрации ознакомьтесь с нашим преимуществами\
+         и выберите подходящий тариф, нажав на кнопку тарифа
 
         Это обязательная процедура, для продолжения пользования сайтом необходимо выбрать и оплатить тариф.
         """).replace("  ", "")
     update.message.reply_document(
         price_pdf,
-        filename="Тарифы.pdf",
+        filename="Преимущества.pdf",
         caption=greeting_msg,
         reply_markup=markup)
 
@@ -223,10 +223,12 @@ def send_payment(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    chat_id = '???'
-    tariff = '???'
+    chat_id = context.user_data["telegram_id"]
+    tariff = context.user_data["rate"]
     # update.message.reply_text(text=send_payment_link(chat_id, tariff),
     #                           reply_markup=markup)
+    update.message.reply_text(text='жми оплатить',
+                              reply_markup=markup)
     return States.PAYMENT
 
 
@@ -422,11 +424,21 @@ def create_order_description(update, context):
 
 def add_file_to_order(update, context):
     telegram_id = context.user_data["telegram_id"]
-    if not os.path.exists(f'media/{telegram_id}'):
-        os.mkdir(f'media/{telegram_id}')
+    order_name = context.user_data['order_name']
+    if not os.path.exists(f'media/{telegram_id}/{order_name}'):
+        if not os.path.exists('media'):
+            os.mkdir('media')
+            os.mkdir(f'media/{telegram_id}')
+            os.mkdir(f'media/{telegram_id}/{order_name}')
+        else:
+            if not os.path.exists(f'media/{telegram_id}'):
+                os.mkdir(f'media/{telegram_id}')
+                os.mkdir(f'media/{telegram_id}/{order_name}')
+            else:
+                os.mkdir(f'media/{telegram_id}/{order_name}')
     document_name = update.message.document.file_name
     document = update.message.document.get_file()
-    document.download(f'media/{telegram_id}/{document_name}')
+    document.download(f'media/{telegram_id}/{order_name}/{document_name}')
 
     message_keyboard = [
         ['Пропустить']
@@ -447,10 +459,20 @@ def create_order(update, context):
     order_name = context.user_data['order_name']
     order_description = context.user_data['order_description']
     telegram_id = context.user_data["telegram_id"]
+    if os.path.exists(f'media/{telegram_id}/{order_name}'):
+        order_files = []
+        files_name = os.listdir(f'media/{telegram_id}/{order_name}')
+        for name in files_name:
+            order_files.append(f'media/{telegram_id}/{order_name}/{name}')
+
+    else:
+        order_files = []
+
     payload = {
         'title': order_name,
         'description': order_description,
         'chat_id': telegram_id,
+        'files': order_files
     }
     call_api_post("api/order/add", payload)
 
