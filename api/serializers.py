@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from telegram_bot.models import Client, Order, Freelancer, Tariff
+from telegram_bot.models import Client, Order, Freelancer, Tariff, File
 
 
 class TariffSerializer(serializers.ModelSerializer):
@@ -25,10 +25,18 @@ class FreelancerSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class FileSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = File
+        fields = ['file']
+
+
 class OrderSerializer(serializers.ModelSerializer):
 
     client = ClientSerializer()
     freelancer = FreelancerSerializer()
+    files = serializers.FileField(use_url=True)
 
     class Meta:
         model = Order
