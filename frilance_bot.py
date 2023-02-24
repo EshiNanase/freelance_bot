@@ -32,6 +32,7 @@ class States(Enum):
     VERIFICATE = auto()
     FRILANCER = auto()
     FRILANCER_ORDERS = auto()
+    ORDERS_PAGINATOR = auto()
 
 
 class BotData:
@@ -302,6 +303,13 @@ def check(update, context):
             [f'Взять в работу заказ №{order_id}'],
             ['Назад']
         ]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        update.message.reply_text(text=message, reply_markup=markup)
+        return States.FRILANCER_ORDERS
     else:
         message_keyboard = [
             [f'Подтвердить выполнение заказа №{order_id}'],
@@ -314,6 +322,31 @@ def check(update, context):
         one_time_keyboard=True
     )
     update.message.reply_text(text=message, reply_markup=markup)
+    return States.ORDERS
+
+
+def finish_orders(update, context):
+    chat_id = update.effective_message.chat_id
+    order_id = update.message.text.replace('Подтвердить выполнение заказа №', '')
+    print(order_id)
+    # endpoint = f'api/order/{order_id}'
+    # order = call_api_get(endpoint)
+
+    endpoint = f'api/order/finish'
+    payload = {
+        "order_id": order_id,
+    }
+    call_api_post(endpoint, payload)
+    message_keyboard = [
+        ['Показать все заказы в работе', 'Назад'],
+        ['Главное меню']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text="Заказ помечен как выполненный", reply_markup=markup)
     return States.FRILANCER_ORDERS
 
 
@@ -331,8 +364,8 @@ def add_orders_to_frilancer(update, context):
     }
     call_api_post(endpoint, payload)
     message_keyboard = [
-        ['Взять в работу'],
-        ['Назад']
+        ['Показать все заказы в работе', 'Назад'],
+        ['Главное меню']
     ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
@@ -463,31 +496,50 @@ def func_chunks_generators(lst, n):
 
 five = ''
 orders_by_five_elements = ''
+count = 1
 def show_five_orders(update, context):
+    text = update.message.text
     global five
-    global orders_by_five_elements
+    global count
+    # global orders_by_five_elements
     if five == '':
-        endpoint = 'api/all_orders'
-        orders = call_api_get(endpoint)
-        orders_title = [order for order in orders]
-        orders_by_five_elements = cycle(func_chunks_generators(orders_title, 5))
-        five = next(orders_by_five_elements)
+        five = call_api_get(f'api/order/find?page={count}')
     else:
-        five = next(orders_by_five_elements)
-
+        if text == 'Следующие заказы':
+            count += 1
+            five = call_api_get(f'api/order/find?page={count}')
+        elif text == 'Предыдущие заказы':
+            count -= 1
+            five = call_api_get(f'api/order/find?page={count}')
     ps = [
-        f'/order_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five)]
+        f'/order_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five['results'])]
     messages = ' '.join(ps)
-    message_keyboard = [
-        ['Назад', 'Следующие заказы']
-    ]
+    if not five['previous'] and not five['next']:
+        message_keyboard = [
+            ['Назад']
+        ]
+    elif five['previous'] and five['next']:
+        message_keyboard = [
+            ['Предыдущие заказы', 'Следующие заказы'],
+            ['Назад']
+        ]
+    elif five['previous'] and not five['next']:
+        message_keyboard = [
+            ['Предыдущие заказы'],
+            ['Назад']
+        ]
+    elif not five['previous'] and five['next']:
+        message_keyboard = [
+            ['Следующие заказы'],
+            ['Назад']
+        ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
         one_time_keyboard=True
     )
     update.message.reply_text(text=messages, reply_markup=markup)
-    return States.FRILANCER
+    return States.ORDERS_PAGINATOR
 
 
 def show_frilancer_orders(update, context):
@@ -550,6 +602,7 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Мои заказы'), show_frilancer_orders),
                 MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
                 MessageHandler(Filters.text('Взять в работу'), add_orders_to_frilancer),
+                MessageHandler(Filters.text('Назад'), show_five_orders),
 
                 MessageHandler(Filters.text, start),
             ],
@@ -557,9 +610,17 @@ if __name__ == '__main__':
                 MessageHandler(Filters.command(False), check),
                 CommandHandler('order', check),
                 MessageHandler(Filters.text('Назад'), show_five_orders),
-                MessageHandler(Filters.text('Взять в работу'), show_frilancer_orders),
+                MessageHandler(Filters.text('Показать все заказы в работе'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
                 MessageHandler(Filters.text, add_orders_to_frilancer),
+            ],
+            States.ORDERS_PAGINATOR: [
+                MessageHandler(Filters.command(False), check),
+                CommandHandler('order', check),
+                MessageHandler(Filters.text('Назад'), start),
+                MessageHandler(Filters.text('Предыдущие заказы'), show_five_orders),
+                MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
+                MessageHandler(Filters.text, start),
             ],
             States.PRICE: [
                 MessageHandler(Filters.text("Назад"), start),
@@ -568,6 +629,9 @@ if __name__ == '__main__':
             States.ORDERS: [
                 MessageHandler(Filters.text("Новый заказ"), send_new_order),
                 MessageHandler(Filters.text("Мои заказы"), show_orders),
+                MessageHandler(Filters.text('Назад'), show_frilancer_orders),
+                MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(Filters.text, finish_orders),
             ],
             States.ORDER_NAME: [
                 MessageHandler(Filters.text("Назад"), send_new_order),
