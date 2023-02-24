@@ -13,6 +13,8 @@ import stripe
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http.response import HttpResponse
+from django.db.models import Subquery, OuterRef
+from django.db import models
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -78,7 +80,7 @@ def get_detailed_order(request, order_id) -> Response:
     )
 
 
-@extend_schema(request=ClientSerializer, description='Создание фрилансера')
+@extend_schema(request=ClientSerializer, description='Создание клиента')
 @api_view(['POST'])
 def create_client(request) -> Response:
 
@@ -88,6 +90,7 @@ def create_client(request) -> Response:
     serializer.is_valid(raise_exception=True)
 
     tariff = get_object_or_404(Tariff, title=data['tariff'])
+
     updated_values = {
         'tariff': tariff,
         'requests_left': tariff.request_quantity
@@ -122,7 +125,10 @@ def create_freelancer(request) -> Response:
 @api_view(['GET'])
 def get_orders(request) -> Response:
 
-    orders = list(Order.objects.all())
+    files = File.objects.filter(order=OuterRef('id')).all().values('file')
+    orders = Order.objects.all().annotate(files=Subquery(files, output_field=models.CharField()))
+    for order in orders:
+        print(order.id, order.files)
     serializer = OrderSerializer(orders, many=True)
     response = serializer.data
 
@@ -155,7 +161,7 @@ def create_order(request) -> Response:
             obj = File.objects.create(
                 order=order,
             )
-            obj.file.name = f'{file}'
+            obj.file.path = file
             obj.save()
 
     return Response(

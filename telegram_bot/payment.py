@@ -26,3 +26,5 @@ def send_payment_link(chat_id, tariff):
             )
     return checkout_session.url
 
+
+print(send_payment_link(134435323, 'VIP'))
