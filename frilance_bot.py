@@ -238,8 +238,8 @@ def send_payment(update, context):
     )
     chat_id = context.user_data["telegram_id"]
     tariff = context.user_data["rate"]
-    update.message.reply_text(text=send_payment_link(chat_id, tariff),
-                              reply_markup=markup)
+    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
+    #                           reply_markup=markup)
     update.message.reply_text(text='жми оплатить',
                               reply_markup=markup)
     return States.PAYMENT
@@ -488,7 +488,7 @@ def create_order(update, context):
         'chat_id': telegram_id,
         'files': order_files
     }
-    # print(payload)
+    print(payload)
     call_api_post("api/order/add", payload)
 
     message_keyboard = [
