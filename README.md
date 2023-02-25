@@ -9,4 +9,5 @@ DEBUG = True
 ALLOWED_HOSTS=31.184.254.14,127.0.0.1,localhost
 DATABASE_ENGINE=django.db.backends.sqlite3
 DATABASE_NAME=db.sqlite3
+API_URL=http://31.184.254.14
 ```
