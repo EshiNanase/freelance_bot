@@ -2,13 +2,12 @@ import stripe
 import requests
 # FIXME
 from freelance import settings
-
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 def send_payment_link(chat_id, tariff):
 
-    url = f'http://127.0.0.1:8000/api/tariff/{tariff}'
+    url = f'{settings.API_URL}/api/tariff/{tariff}'
     response = requests.get(url)
     response.raise_for_status()
     stripe_id = response.json()['stripe_id']
@@ -26,5 +25,4 @@ def send_payment_link(chat_id, tariff):
             )
     return checkout_session.url
 
-
-print(send_payment_link(134435323, 'VIP'))
+print(send_payment_link(0, 'VIP'))

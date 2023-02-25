@@ -98,6 +98,8 @@ class Freelancer(models.Model):
 
 class Order(models.Model):
 
+    default_dialogue = {'cl': [], 'fr': []}
+
     title = models.CharField(
         max_length=256,
         verbose_name='Название'
@@ -109,6 +111,14 @@ class Order(models.Model):
         to=Client,
         on_delete=models.CASCADE,
         verbose_name='Клиент'
+    )
+    dialogue = models.JSONField(
+        default=default_dialogue,
+        verbose_name='Переписка'
+    )
+    files = models.JSONField(
+        default=[],
+        verbose_name='Файлы'
     )
     freelancer = models.ForeignKey(
         blank=True,
@@ -138,21 +148,3 @@ class Order(models.Model):
 
     def __str__(self):
         return f'{self.title}'
-
-
-class File(models.Model):
-    file = models.FileField(
-        verbose_name='Файл'
-    )
-    order = models.ForeignKey(
-        to=Order,
-        on_delete=models.CASCADE,
-        verbose_name='Заказ'
-    )
-
-    class Meta:
-        verbose_name = 'Файл к заказу'
-        verbose_name_plural = 'Файлы к заказу'
-
-    def __str__(self):
-        return self.file.name

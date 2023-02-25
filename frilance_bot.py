@@ -1,18 +1,19 @@
+import os
 import logging
 import datetime
-import os
+import environs
 import requests
+
 from enum import Enum, auto
 from textwrap import dedent
 from telegram import ParseMode
+from django.conf import settings
 from more_itertools import chunked
-from itertools import cycle
-import environs
+from telegram.ext import MessageFilter
 from telegram import ReplyKeyboardMarkup
+from telegram_bot.payment import send_payment_link
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
-from telegram.ext import MessageFilter
-from telegram_bot.payment import send_payment_link
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 class FilterAwesome(MessageFilter):
     def filter(self, message):
-        return 'Взять в работу' in message.text or 'Подтвердить выполнение заказа' in message.text
+        return 'Взять в работу' in message.text or \
+            'Подтвердить выполнение заказа' in message.text
 
 
 check_do_to_work = FilterAwesome()
@@ -48,14 +50,14 @@ class BotData:
 
 
 def call_api_get(endpoint):
-    url = f"http://127.0.0.1:8000/{endpoint}"
+    url = f"{settings.API_URL}/{endpoint}"
     response = requests.get(url)
     response.raise_for_status()
     return response.json()
 
 
 def call_api_post(endpoint, payload):
-    url = f"http://127.0.0.1:8000/{endpoint}"
+    url = f"{settings.API_URL}/{endpoint}"
     response = requests.post(url, data=payload)
     response.raise_for_status()
     return response.json()
@@ -76,8 +78,10 @@ def start(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_markdown_v2(text=greetings,
-                                     reply_markup=markup)
+    update.message.reply_markdown_v2(text=greetings, reply_markup=markup)
+
+    context.user_data['five_orders'] = ''
+    context.user_data['count'] = 1
     return States.START
 
 
@@ -113,6 +117,7 @@ def send_to_admin(update, context):
     )
     return
 
+
 def check_client(update, context):
     given_callback = update.callback_query
     if given_callback:
@@ -123,7 +128,7 @@ def check_client(update, context):
         telegram_id = update.message.from_user.id
         context.user_data["telegram_id"] = telegram_id
 
-    url = f"http://127.0.0.1:8000/api/clients/{telegram_id}"
+    url = f"{settings.API_URL}/api/clients/{telegram_id}"
     response = requests.get(url)
 
     if response.ok:
@@ -189,7 +194,7 @@ def check_client(update, context):
 
 def chooze_rate(update, context):
     context.user_data["rate"] = update.message.text
-    url = f"http://127.0.0.1:8000/api/tariff/{update.message.text}"
+    url = f"{settings.API_URL}/api/tariff/{update.message.text}"
     response = requests.get(url)
     response.raise_for_status()
     rate_name = response.json()['title']
@@ -233,7 +238,9 @@ def send_payment(update, context):
     )
     chat_id = context.user_data["telegram_id"]
     tariff = context.user_data["rate"]
-    update.message.reply_text(text=send_payment_link(chat_id, tariff),
+    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
+    #                           reply_markup=markup)
+    update.message.reply_text(text='жми оплатить',
                               reply_markup=markup)
     return States.PAYMENT
 
@@ -250,10 +257,10 @@ def add_user(update, context):
 
 def check_frilancer(update, context):
     chat_id = update.effective_message.chat_id
-    url = f"http://127.0.0.1:8000/api/freelancers/{chat_id}"
-    response = requests.get(url)
-    x = response.status_code
-    if response.status_code == 404:
+    endpoint = f"api/freelancers/{chat_id}"
+    try:
+        response = call_api_get(endpoint)
+    except requests.exceptions.HTTPError:
         message_keyboard = [
             ['Пройти верификацию']
         ]
@@ -262,9 +269,10 @@ def check_frilancer(update, context):
             resize_keyboard=True,
             one_time_keyboard=True
         )
-        update.message.reply_text(text='Что-бы принимать заказы вам нужно сначала пройти верификацию, '
-                                       'нажмите кнопку "Пройти верификацию"',
-                                  reply_markup=markup)
+        update.message.reply_text(
+            text='Что-бы принимать заказы вам нужно сначала пройти верификацию, '
+                 'нажмите кнопку "Пройти верификацию"', reply_markup=markup
+        )
         return States.VERIFICATE
     message_keyboard = [
         ['Выбрать заказ', 'Мои заказы']
@@ -274,9 +282,9 @@ def check_frilancer(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Выберете следующее действие:',
-                              reply_markup=markup)
-
+    update.message.reply_text(
+        text='Выберете следующее действие:', reply_markup=markup
+    )
     return States.FRILANCER
 
 
@@ -294,8 +302,10 @@ def verify_freelancer(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Поздравляем, вы прошли верификацию, теперь вы можете брать заказы.',
-                              reply_markup=markup)
+    update.message.reply_text(
+        text='Поздравляем, вы прошли верификацию, теперь вы можете брать '
+             'заказы.', reply_markup=markup
+    )
     return States.START
 
 
@@ -304,7 +314,8 @@ def check(update, context):
     order_id = update.message.text.replace('/order_', '')
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
-    message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
+    message = f'Название заказа - {order["title"]}\n\nОписание: ' \
+              f'{order["description"]}'
     if order['freelancer'] is None:
         message_keyboard = [
             [f'Взять в работу заказ №{order_id}'],
@@ -333,12 +344,7 @@ def check(update, context):
 
 
 def finish_orders(update, context):
-    chat_id = update.effective_message.chat_id
     order_id = update.message.text.replace('Подтвердить выполнение заказа №', '')
-    print(order_id)
-    # endpoint = f'api/order/{order_id}'
-    # order = call_api_get(endpoint)
-
     endpoint = f'api/order/finish'
     payload = {
         "order_id": order_id,
@@ -353,14 +359,15 @@ def finish_orders(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text="Заказ помечен как выполненный", reply_markup=markup)
+    update.message.reply_text(
+        text="Заказ помечен как выполненный", reply_markup=markup
+    )
     return States.FRILANCER_ORDERS
 
 
 def add_orders_to_frilancer(update, context):
     chat_id = update.effective_message.chat_id
     order_id = update.message.text.replace('Взять в работу заказ №', '')
-    print(order_id)
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
 
@@ -392,8 +399,10 @@ def send_new_order(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Укажите короткое имя заказа, чтобы потом его легче было искать',
-                              reply_markup=markup)
+    update.message.reply_text(
+        text='Укажите короткое имя заказа, чтобы потом его легче было искать',
+        reply_markup=markup
+    )
     return States.ORDER_NAME
 
 
@@ -407,8 +416,9 @@ def create_order_name(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Опишите суть заказа',
-                              reply_markup=markup)
+    update.message.reply_text(
+        text='Опишите суть заказа', reply_markup=markup
+    )
     return States.ORDER_DESCRIPTION
 
 
@@ -453,10 +463,10 @@ def add_file_to_order(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    message = 'Вы прикрепили файл к заказу, если нужно добавить еще файлы - добавляйте, либо' \
-              'нажмите "Пропустить" для формирования и отправки заказа'
-    update.message.reply_text(text=message,
-                              reply_markup=markup)
+    message = 'Вы прикрепили файл к заказу, если нужно добавить еще файлы - ' \
+              'добавляйте, либо нажмите "Пропустить" для формирования и ' \
+              'отправки заказа'
+    update.message.reply_text(text=message, reply_markup=markup)
     return States.ORDER_FILES
 
 
@@ -469,7 +479,6 @@ def create_order(update, context):
         files_name = os.listdir(f'media/{telegram_id}/{order_name}')
         for name in files_name:
             order_files.append(f'{telegram_id}/{order_name}/{name}')
-
     else:
         order_files = []
     payload = {
@@ -496,8 +505,7 @@ def create_order(update, context):
         
         А если нет, то нажмите "Назад"
         """).replace("  ", "")
-    update.message.reply_text(text=message,
-                              reply_markup=markup)
+    update.message.reply_text(text=message, reply_markup=markup)
     return States.ORDER_FILES
 
 
@@ -519,6 +527,7 @@ def show_orders(update, context):
     update.message.reply_text(text=messages, reply_markup=markup)
     return States.CLIENT_ORDERS
 
+
 def check_client_order(update, context):
 
     order_id = update.message.text.replace('/order_', '')
@@ -536,46 +545,46 @@ def check_client_order(update, context):
     update.message.reply_text(text=message, reply_markup=markup)
     return States.CLIENT_ORDERS
 
-def func_chunks_generators(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i : i + n]
 
-
-five = ''
-orders_by_five_elements = ''
-count = 1
 def show_five_orders(update, context):
     text = update.message.text
-    global five
-    global count
-    # global orders_by_five_elements
-    if five == '':
-        five = call_api_get(f'api/order/find?page={count}')
+    if context.user_data['five_orders'] == '':
+        context.user_data['five_orders'] = call_api_get(f'api/order/find')
     else:
         if text == 'Следующие заказы':
-            count += 1
-            five = call_api_get(f'api/order/find?page={count}')
+            context.user_data['count'] += 1
+            context.user_data['five_orders'] = call_api_get(
+                f'api/order/find?page={context.user_data["count"]}'
+            )
         elif text == 'Предыдущие заказы':
-            count -= 1
-            five = call_api_get(f'api/order/find?page={count}')
-    ps = [
-        f'/order_{p["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(five['results'])]
-    messages = ' '.join(ps)
-    if not five['previous'] and not five['next']:
+            context.user_data['count'] -= 1
+            context.user_data['five_orders'] = call_api_get(
+                f'api/order/find?page={context.user_data["count"]}'
+            )
+    orders_response = [
+        f'/order_{order["id"]}⬅ВЫБРАТЬ ЗАКАЗ. \n {order["title"]} \n\n'
+        for order in context.user_data["five_orders"]["results"]
+    ]
+    messages = ' '.join(orders_response)
+    if not context.user_data['five_orders']['previous'] and \
+            not context.user_data['five_orders']['next']:
         message_keyboard = [
             ['Назад']
         ]
-    elif five['previous'] and five['next']:
+    elif context.user_data['five_orders']['previous'] and \
+            context.user_data['five_orders']['next']:
         message_keyboard = [
             ['Предыдущие заказы', 'Следующие заказы'],
             ['Назад']
         ]
-    elif five['previous'] and not five['next']:
+    elif context.user_data['five_orders']['previous'] and \
+            not context.user_data['five_orders']['next']:
         message_keyboard = [
             ['Предыдущие заказы'],
             ['Назад']
         ]
-    elif not five['previous'] and five['next']:
+    elif not context.user_data['five_orders']['previous'] and \
+            context.user_data['five_orders']['next']:
         message_keyboard = [
             ['Следующие заказы'],
             ['Назад']
@@ -593,9 +602,14 @@ def show_frilancer_orders(update, context):
     chat_id = update.effective_message.chat_id
     url = f'api/freelancers/{chat_id}/orders'
     orders = call_api_get(url)
-    ps = [
-        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(orders)]
-    messages = ' '.join(ps)
+    if not orders:
+        messages = 'У вас пока нет заказов в работе.'
+    else:
+        orders_response = [
+            f'/order_{order["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {order["title"]} \n\n'
+            for order in orders
+        ]
+        messages = ' '.join(orders_response)
     message_keyboard = [
         ['Назад', 'Главное меню']
     ]
@@ -606,11 +620,6 @@ def show_frilancer_orders(update, context):
     )
     update.message.reply_text(text=messages, reply_markup=markup)
     return States.FRILANCER_ORDERS
-
-
-# def error(update, context):
-#     logger.warning('Update "%s" caused error "%s"', update, error)
-#     update.message.reply_text('Произошла ошибка')
 
 
 if __name__ == '__main__':

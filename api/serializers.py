@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from telegram_bot.models import Client, Order, Freelancer, Tariff, File
+from telegram_bot.models import Client, Order, Freelancer, Tariff
 
 
 class TariffSerializer(serializers.ModelSerializer):
@@ -25,18 +25,10 @@ class FreelancerSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class FileSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = File
-        fields = ['file']
-
-
 class OrderSerializer(serializers.ModelSerializer):
 
     client = ClientSerializer()
     freelancer = FreelancerSerializer()
-    files = serializers.FileField(use_url=True)
 
     class Meta:
         model = Order
@@ -50,6 +42,7 @@ class OrderCreateSerializer(serializers.Serializer):
     chat_id = serializers.IntegerField()
     files = serializers.ListField(
         child=serializers.CharField(),
+        required=False
     )
 
 
@@ -62,3 +55,12 @@ class OrderAppointFreelancerSerializer(serializers.Serializer):
 class OrderFinishSerializer(serializers.Serializer):
 
     order_id = serializers.IntegerField()
+
+
+class ContactOtherSideSerializer(serializers.Serializer):
+
+    choices = ('cl', 'fr')
+
+    order_id = serializers.IntegerField()
+    side = serializers.ChoiceField(choices=choices)
+    message = serializers.CharField()
