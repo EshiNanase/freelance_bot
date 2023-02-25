@@ -257,6 +257,15 @@ def add_user(update, context):
 
 
 def check_frilancer(update, context):
+    given_callback = update.callback_query
+    if given_callback:
+        telegram_id = context.user_data["telegram_id"]
+        given_callback.answer()
+        given_callback.delete_message()
+    else:
+        telegram_id = update.message.from_user.id
+        context.user_data["telegram_id"] = telegram_id
+
     chat_id = update.effective_message.chat_id
     endpoint = f"api/freelancers/{chat_id}"
     try:
@@ -313,8 +322,10 @@ def verify_freelancer(update, context):
 def check(update, context):
 
     order_id = update.message.text.replace('/order_', '')
+    context.user_data['order_id'] = order_id
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
+    context.user_data['client_chat_id'] = order['client']['chat_id']
     message = f'Название заказа - {order["title"]}\n\nОписание: ' \
               f'{order["description"]}'
     if order['freelancer'] is None:
@@ -385,7 +396,8 @@ def add_orders_to_frilancer(update, context):
     order_id = update.message.text.replace('Взять в работу заказ №', '')
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
-
+    pprint(order)
+    context.user_data['client_chat_id'] = order['client']['chat_id']
     endpoint = f'api/freelancers/appoint'
     payload = {
         "order_id": order_id,
@@ -401,8 +413,53 @@ def add_orders_to_frilancer(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text="Заказ взят в работу", reply_markup=markup)
+    update.message.reply_text(text="Заказ взят в работу. Напишите клиенту об этом", reply_markup=markup)
     return States.FRILANCER_ORDERS
+
+
+def send_message_to_client(update, context):
+    message_from_frilanser = update.message.text
+    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
+    order_id = context.user_data['order_id']
+    message_to_client = dedent(f"""\
+                    <b>Сообщение от {user_fullname}</b>
+
+                    <b>Текст сообщение:</b>
+                    {message_from_frilanser}
+                    """).replace("    ", "")
+    # endpoint = f'api/contact/'
+    # payload = {
+    #     "order_id": int(order_id),
+    #     "message": f'{user_fullname}: {message_from_frilanser}',
+    #     "side": "fr"
+    # }
+    # call_api_post(endpoint, payload)
+
+    update.message.chat.id = context.user_data['client_chat_id']
+    message_keyboard = [
+        ['Ответить исполнителю']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message_to_client,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
+
+    update.message.chat.id = context.user_data["telegram_id"]
+    message_keyboard = [
+        ['Вернуться к заказам']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='сообщение отправлено',
+                              reply_markup=markup)
+    return States.ORDERS
 
 
 def send_new_order(update, context):
@@ -692,7 +749,9 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Назад'), show_five_orders),
                 MessageHandler(Filters.text('Показать все заказы в работе'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
                 MessageHandler(check_do_to_work, add_orders_to_frilancer),
+                MessageHandler(Filters.text, send_message_to_client),
             ],
             States.ORDERS_PAGINATOR: [
                 MessageHandler(Filters.command(False), check),
@@ -711,7 +770,9 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text("Мои заказы"), show_orders),
                 MessageHandler(Filters.text('Назад'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
                 MessageHandler(check_do_to_work, finish_orders),
+                MessageHandler(Filters.text, send_message_to_client),
             ],
             States.ORDER_NAME: [
                 MessageHandler(Filters.text("Назад"), send_new_order),
