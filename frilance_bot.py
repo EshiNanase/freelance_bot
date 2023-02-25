@@ -14,6 +14,7 @@ from telegram import ReplyKeyboardMarkup
 from telegram_bot.payment import send_payment_link
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
+from pprint import pprint
 
 
 logger = logging.getLogger(__name__)
@@ -327,6 +328,13 @@ def check(update, context):
             one_time_keyboard=True
         )
         update.message.reply_text(text=message, reply_markup=markup)
+        for file in order['files']:
+            document_name = file.partition('/')[2]
+            with open(file, 'rb') as file:
+                document = file.read()
+            update.message.reply_document(
+                document,
+                filename=document_name)
         return States.FRILANCER_ORDERS
     else:
         message_keyboard = [
@@ -340,6 +348,13 @@ def check(update, context):
         one_time_keyboard=True
     )
     update.message.reply_text(text=message, reply_markup=markup)
+    for file in order['files']:
+        document_name = file.partition('/')[2]
+        with open(file, 'rb') as file:
+            document = file.read()
+        update.message.reply_document(
+            document,
+            filename=document_name)
     return States.ORDERS
 
 
@@ -478,7 +493,7 @@ def create_order(update, context):
         order_files = []
         files_name = os.listdir(f'media/{telegram_id}/{order_name}')
         for name in files_name:
-            order_files.append(f'{telegram_id}/{order_name}/{name}')
+            order_files.append(f'media/{telegram_id}/{order_name}/{name}')
     else:
         order_files = []
     payload = {
@@ -488,6 +503,7 @@ def create_order(update, context):
         'files': order_files
     }
     call_api_post("api/order/add", payload)
+    pprint(payload)
 
     message_keyboard = [
         ['Назад']
@@ -543,6 +559,14 @@ def check_client_order(update, context):
         one_time_keyboard=True
     )
     update.message.reply_text(text=message, reply_markup=markup)
+    for file in order['files']:
+        document_name = file.partition('/')[2]
+        with open(file, 'rb') as file:
+            document = file.read()
+        update.message.reply_document(
+            document,
+            filename=document_name)
+
     return States.CLIENT_ORDERS
 
 
