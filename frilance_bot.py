@@ -553,7 +553,7 @@ def show_five_orders(update, context):
     global count
     # global orders_by_five_elements
     if five == '':
-        five = call_api_get(f'api/order/find?page={count}')
+        five = call_api_get(f'api/order/find')
     else:
         if text == 'Следующие заказы':
             count += 1
@@ -596,9 +596,14 @@ def show_frilancer_orders(update, context):
     chat_id = update.effective_message.chat_id
     url = f'api/freelancers/{chat_id}/orders'
     orders = call_api_get(url)
-    ps = [
-        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(orders)]
-    messages = ' '.join(ps)
+    if not orders:
+        messages = 'У вас пока нет заказов в работе.'
+    else:
+        orders_response = [
+            f'/order_{order["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {order["title"]} \n\n'
+            for order in orders
+        ]
+        messages = ' '.join(orders_response)
     message_keyboard = [
         ['Назад', 'Главное меню']
     ]
