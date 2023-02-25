@@ -146,6 +146,8 @@ def create_order(request) -> Response:
     data = serializer.data
 
     client = get_object_or_404(Client, chat_id=data['chat_id'])
+    if client.requests_left - 1 < 0:
+        return Response(data={'error': 'max requests exceeded'}, status=HTTPStatus.BAD_REQUEST)
     client.requests_left -= 1
     client.save()
 
@@ -260,7 +262,8 @@ def contact_other_side(request) -> Response:
     data = serializer.data
 
     order = get_object_or_404(Order, id=data['order_id'])
-    order.dialogue[data['side']].append(data['message'])
+    print(order.dialogue)
+    order.dialogue.append(data['message'])
     order.save()
 
     return Response(

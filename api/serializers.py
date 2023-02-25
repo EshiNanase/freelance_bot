@@ -59,8 +59,5 @@ class OrderFinishSerializer(serializers.Serializer):
 
 class ContactOtherSideSerializer(serializers.Serializer):
 
-    choices = ('cl', 'fr')
-
     order_id = serializers.IntegerField()
-    side = serializers.ChoiceField(choices=choices)
     message = serializers.CharField()

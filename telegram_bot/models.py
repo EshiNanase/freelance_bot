@@ -98,8 +98,6 @@ class Freelancer(models.Model):
 
 class Order(models.Model):
 
-    default_dialogue = {'cl': [], 'fr': []}
-
     title = models.CharField(
         max_length=256,
         verbose_name='Название'
@@ -113,11 +111,11 @@ class Order(models.Model):
         verbose_name='Клиент'
     )
     dialogue = models.JSONField(
-        default=default_dialogue,
+        default=list,
         verbose_name='Переписка'
     )
     files = models.JSONField(
-        default=[],
+        default=list,
         verbose_name='Файлы'
     )
     freelancer = models.ForeignKey(
