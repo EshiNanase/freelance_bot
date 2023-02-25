@@ -147,6 +147,7 @@ class File(models.Model):
     order = models.ForeignKey(
         to=Order,
         on_delete=models.CASCADE,
+        related_name='files',
         verbose_name='Заказ'
     )
 
