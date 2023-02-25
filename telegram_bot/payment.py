@@ -24,3 +24,5 @@ def send_payment_link(chat_id, tariff):
                 success_url='https://www.youtube.com/watch?v=cuX5QQXbLDQ'
             )
     return checkout_session.url
+
+print(send_payment_link(0, 'VIP'))
