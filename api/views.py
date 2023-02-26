@@ -262,8 +262,7 @@ def contact_other_side(request) -> Response:
     data = serializer.data
 
     order = get_object_or_404(Order, id=data['order_id'])
-    print(order.dialogue)
-    order.dialogue.append(data['message'])
+    order.dialogue += f'{data["message"]}\n'
     order.save()
 
     return Response(
