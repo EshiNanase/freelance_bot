@@ -266,6 +266,7 @@ def contact_other_side(request) -> Response:
     order.save()
 
     return Response(
+        data=serializer.data,
         status=HTTPStatus.OK
     )
 
