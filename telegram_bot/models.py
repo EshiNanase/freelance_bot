@@ -110,8 +110,8 @@ class Order(models.Model):
         on_delete=models.CASCADE,
         verbose_name='Клиент'
     )
-    dialogue = models.JSONField(
-        default=list,
+    dialogue = models.TextField(
+        blank=True,
         verbose_name='Переписка'
     )
     files = models.JSONField(
@@ -145,4 +145,4 @@ class Order(models.Model):
         verbose_name_plural = 'Заказы'
 
     def __str__(self):
-        return f'{self.title}'
+        return self.title
