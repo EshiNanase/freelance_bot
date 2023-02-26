@@ -25,8 +25,14 @@ class FilterAwesome(MessageFilter):
         return 'Взять в работу' in message.text or \
             'Подтвердить выполнение заказа' in message.text
 
-
 check_do_to_work = FilterAwesome()
+
+
+class FilterAnswer(MessageFilter):
+    def filter(self, message):
+        return 'Ответить исполнителю' in message.text
+
+check_answer = FilterAnswer()
 
 
 class States(Enum):
@@ -43,6 +49,7 @@ class States(Enum):
     VERIFICATE = auto()
     FRILANCER = auto()
     FRILANCER_ORDERS = auto()
+    ANSWER_TO_FRILANSER = auto()
     ORDERS_PAGINATOR = auto()
 
 
@@ -326,6 +333,7 @@ def check(update, context):
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
     context.user_data['client_chat_id'] = order['client']['chat_id']
+    context.user_data['order_title'] = order["title"]
     message = f'Название заказа - {order["title"]}\n\nОписание: ' \
               f'{order["description"]}'
     if order['freelancer'] is None:
@@ -421,23 +429,25 @@ def send_message_to_client(update, context):
     message_from_frilanser = update.message.text
     user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
     order_id = context.user_data['order_id']
+    order_title = context.user_data['order_title']
     message_to_client = dedent(f"""\
                     <b>Сообщение от {user_fullname}</b>
 
                     <b>Текст сообщение:</b>
                     {message_from_frilanser}
+                    
+                    <b>Нажми кнопку "Ответить"</b>
                     """).replace("    ", "")
-    # endpoint = f'api/contact/'
-    # payload = {
-    #     "order_id": int(order_id),
-    #     "message": f'{user_fullname}: {message_from_frilanser}',
-    #     "side": "fr"
-    # }
-    # call_api_post(endpoint, payload)
+    endpoint = f'api/contact/'
+    payload = {
+        "order_id": int(order_id),
+        "message": f'{user_fullname}: {message_from_frilanser}',
+    }
+    call_api_post(endpoint, payload)
 
     update.message.chat.id = context.user_data['client_chat_id']
     message_keyboard = [
-        ['Ответить исполнителю']
+        [f'Ответить исполнителю/{context.user_data["telegram_id"]} - заказ №{order_id}']
     ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
@@ -447,6 +457,8 @@ def send_message_to_client(update, context):
     update.message.reply_text(text=message_to_client,
                               reply_markup=markup,
                               parse_mode=ParseMode.HTML)
+    # update.message.reply_text(text=message_to_client,
+    #                           parse_mode=ParseMode.HTML)
 
     update.message.chat.id = context.user_data["telegram_id"]
     message_keyboard = [
@@ -460,6 +472,52 @@ def send_message_to_client(update, context):
     update.message.reply_text(text='сообщение отправлено',
                               reply_markup=markup)
     return States.ORDERS
+
+def handle_message_from_frilanser(update, context):
+    message_from_button = update.message.text
+    order_id = message_from_button.partition('№')[2]
+    context.user_data['frilanser_order_id'] = order_id
+    chat_id = message_from_button.replace('Ответить исполнителю/', '')
+    chat_id = chat_id.partition(' ')[0]
+    context.user_data['frilanser_chat_id'] = chat_id
+    update.message.reply_text(text='Напиши ответ исполнителю')
+    return States.ANSWER_TO_FRILANSER
+
+
+def send_message_to_frilanser(update, context):
+    message_to_frilanser = update.message.text
+    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
+    order_id = context.user_data['frilanser_order_id']
+
+    message_to_frilancer = dedent(f"""\
+                    <b>Сообщение от {user_fullname}</b>
+
+                    <b>Текст сообщение:</b>
+                    {message_to_frilanser}
+                    """).replace("    ", "")
+    endpoint = f'api/contact/'
+    payload = {
+        "order_id": int(order_id),
+        "message": f'{user_fullname}: {message_to_frilanser}',
+    }
+    call_api_post(endpoint, payload)
+
+    update.message.chat.id = context.user_data['frilanser_chat_id']
+    update.message.reply_text(text=message_to_frilancer,
+                              parse_mode=ParseMode.HTML)
+
+    update.message.chat.id = context.user_data["telegram_id"]
+    message_keyboard = [
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='сообщение отправлено',
+                              reply_markup=markup)
+    return States.ANSWER_TO_FRILANSER
 
 
 def send_new_order(update, context):
@@ -763,6 +821,7 @@ if __name__ == '__main__':
             ],
             States.PRICE: [
                 MessageHandler(Filters.text("Назад"), start),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, chooze_rate),
             ],
             States.ORDERS: [
@@ -772,34 +831,45 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Главное меню'), start),
                 MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
                 MessageHandler(check_do_to_work, finish_orders),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, send_message_to_client),
             ],
             States.ORDER_NAME: [
                 MessageHandler(Filters.text("Назад"), send_new_order),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, create_order_name),
             ],
             States.ORDER_DESCRIPTION: [
                 MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, create_order_description),
             ],
             States.ORDER_FILES: [
                 MessageHandler(Filters.text('Пропустить'), create_order),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(Filters.document, add_file_to_order),
+                MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.CLIENT_ORDERS: [
                 MessageHandler(Filters.command(False), check_client_order),
                 CommandHandler('order', check_client_order),
                 MessageHandler(Filters.text('Назад'), check_client),
                 MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.RATE_CHOIСE: [
                 MessageHandler(Filters.text("Выбрать"), send_payment),
                 MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.PAYMENT: [
                 MessageHandler(Filters.text("Оплатить"), add_user),
                 MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(check_answer, handle_message_from_frilanser),
+            ],
+            States.ANSWER_TO_FRILANSER: [
+                MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(Filters.text, send_message_to_frilanser),
             ],
         },
         fallbacks=[],
