@@ -429,7 +429,6 @@ def send_message_to_client(update, context):
     message_from_frilanser = update.message.text
     user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
     order_id = context.user_data['order_id']
-    order_title = context.user_data['order_title']
     message_to_client = dedent(f"""\
                     <b>Сообщение от {user_fullname}</b>
 
@@ -457,8 +456,6 @@ def send_message_to_client(update, context):
     update.message.reply_text(text=message_to_client,
                               reply_markup=markup,
                               parse_mode=ParseMode.HTML)
-    # update.message.reply_text(text=message_to_client,
-    #                           parse_mode=ParseMode.HTML)
 
     update.message.chat.id = context.user_data["telegram_id"]
     message_keyboard = [

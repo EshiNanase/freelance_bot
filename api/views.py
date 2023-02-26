@@ -271,17 +271,6 @@ def contact_other_side(request) -> Response:
         status=HTTPStatus.OK
     )
 
-    # order_id = request.POST.get('order_id')
-    # message = request.POST.get('message')
-    #
-    # order = get_object_or_404(Order, id=order_id)
-    # order.dialogue.append(message)
-    # order.save()
-    #
-    # return Response(
-    #     status=200
-    # )
-
 
 @csrf_exempt
 def stripe_webhook_view(request):
