@@ -618,7 +618,6 @@ def create_order(update, context):
         'files': order_files
     }
     call_api_post("api/order/add", payload)
-    pprint(payload)
 
     message_keyboard = [
         ['Назад']
