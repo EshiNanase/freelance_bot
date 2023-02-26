@@ -335,6 +335,7 @@ def check(update, context):
     order = call_api_get(endpoint)
     context.user_data['client_chat_id'] = order['client']['chat_id']
     context.user_data['order_title'] = order["title"]
+    context.user_data['dialogue'] = order["dialogue"]
     message = f'Название заказа - {order["title"]}\n\nОписание: ' \
               f'{order["description"]}'
     if order['freelancer'] is None:
@@ -359,7 +360,7 @@ def check(update, context):
     else:
         message_keyboard = [
             [f'Подтвердить выполнение заказа №{order_id}'],
-            ['Получить контакт заказчика'],
+            ['Посмотреть переписку'],
             ['Назад']
         ]
     markup = ReplyKeyboardMarkup(
@@ -375,6 +376,34 @@ def check(update, context):
         update.message.reply_document(
             document,
             filename=document_name)
+    return States.ORDERS
+
+
+def send_frilancer_dialogue(update, context):
+    order_title = context.user_data['order_title']
+    order_id = context.user_data['order_id']
+    dialogue_list = context.user_data['dialogue']
+    dialogue = ' '.join(dialogue_list)
+    message = dedent(f"""\
+                           <b>Название заказа</b>
+                           {order_title}
+                           <b>Переписка:</b>
+                           {dialogue}
+                          """).replace("    ", "")
+
+    message_keyboard = [
+            [f'Подтвердить выполнение заказа №{order_id}'],
+            ['Посмотреть переписку'],
+            ['Назад']
+        ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
     return States.ORDERS
 
 
@@ -660,10 +689,14 @@ def show_orders(update, context):
 
 def check_client_order(update, context):
     order_id = update.message.text.replace('/order_', '')
+    context.user_data['order_id'] = order_id
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
+    context.user_data['order_title'] = order["title"]
+    context.user_data['dialogue'] = order["dialogue"]
     message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
     message_keyboard = [
+        ['Посмотреть переписку'],
         ['Назад']
     ]
     markup = ReplyKeyboardMarkup(
@@ -680,6 +713,32 @@ def check_client_order(update, context):
             document,
             filename=document_name)
 
+    return States.CLIENT_ORDERS
+
+
+def send_client_dialogue(update, context):
+    order_title = context.user_data['order_title']
+    order_id = context.user_data['order_id']
+    dialogue_list = context.user_data['dialogue']
+    dialogue = ' '.join(dialogue_list)
+    message = dedent(f"""\
+                           <b>Название заказа</b>
+                           {order_title}
+                           <b>Переписка:</b>
+                           {dialogue}
+                          """).replace("    ", "")
+
+    message_keyboard = [
+        ['Назад']
+        ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
     return States.CLIENT_ORDERS
 
 
@@ -828,6 +887,7 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text('Назад'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
                 MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
+                MessageHandler(Filters.text('Посмотреть переписку'), send_frilancer_dialogue),
                 MessageHandler(check_do_to_work, finish_orders),
                 MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, send_message_to_client),
@@ -853,7 +913,9 @@ if __name__ == '__main__':
                 CommandHandler('order', check_client_order),
                 MessageHandler(Filters.text('Назад'), check_client),
                 MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(Filters.text('Посмотреть переписку'), send_client_dialogue),
                 MessageHandler(check_answer, handle_message_from_frilanser),
+
             ],
             States.RATE_CHOIСE: [
                 MessageHandler(Filters.text("Выбрать"), send_payment),
@@ -867,6 +929,7 @@ if __name__ == '__main__':
             ],
             States.ANSWER_TO_FRILANSER: [
                 MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, send_message_to_frilanser),
             ],
         },
