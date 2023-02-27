@@ -5,7 +5,11 @@ import datetime
 import environs
 import requests
 # import var_dump as var_dump
-from yookassa import Configuration, Payment
+from pathlib import Path
+
+import telegram
+from environs import Env
+import time
 from enum import Enum, auto
 from textwrap import dedent
 from telegram import ParseMode, Bot
@@ -13,15 +17,18 @@ from django.conf import settings
 from more_itertools import chunked
 from telegram.ext import MessageFilter
 from telegram import ReplyKeyboardMarkup
+from yookassa import Configuration, Payment
 from telegram_bot.payment import send_payment_link
 from telegram import LabeledPrice, ShippingOption, Update
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
 from pprint import pprint
-from environs import Env
 
 env = Env()
 env.read_env()
+
+Path.cwd()
+
 logger = logging.getLogger(__name__)
 
 
@@ -186,9 +193,9 @@ def check_client(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-
-    with open('documents/Преимущества.pdf', 'rb') as image:
-        price_pdf = image.read()
+    # file = Path() / 'documents' / 'Преимущества.pdf'
+    # with open(file, 'rb') as file_pdf:
+    #     price_pdf = file_pdf.read()
 
     greeting_msg = dedent("""\
         Привет!✌️
@@ -198,11 +205,14 @@ def check_client(update, context):
 
         Это обязательная процедура, для продолжения пользования сайтом необходимо выбрать и оплатить тариф.
         """).replace("  ", "")
-    update.message.reply_document(
-        price_pdf,
-        filename="Преимущества.pdf",
-        caption=greeting_msg,
-        reply_markup=markup)
+    update.message.reply_text(text=greeting_msg, reply_markup=markup)
+
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
 
     return States.PRICE
 
@@ -261,34 +271,6 @@ def send_payment(update, context):
     return States.PAYMENT
 
 
-# def buy(update, context):
-#     # if config.PAYMENTS_TOKEN.split(':')[1] == 'TEST':
-#     #     bot.send_message(message.chat.id, "Тестовый платеж!!!")
-#     chat_id = update.message.chat_id
-#     method = 'sendInvoice'
-#     token = env('TG_BOT_TOKEN')
-#     url = f'https://api.telegram.org/bot{token}/{method}'
-#     chat_id = update.message.chat_id
-#     bot = Bot(token=env('TG_BOT_TOKEN'))
-#     PRICE = LabeledPrice(label="Подписка на 1 месяц", amount=500 * 100)
-#
-#     data = {
-#         'chat_id': chat_id,
-#         'title':"Подписка на бота",
-#         'description':"Активация подписки на бота на 1 месяц",
-#         'provider_token':env("PAYMENT_TOKEN"),
-#         'currency':"rub",
-#         'photo_url':"https://www.aroged.com/wp-content/uploads/2022/06"
-#                     "/Telegram-has-a-premium-subscription.jpg",
-#         'photo_width':416,
-#         'photo_height':234,
-#         'photo_size':416,
-#         'is_flexible':False,
-#         'prices':[PRICE],
-#         'start_parameter':"one-month-subscription",
-#         'payload':"test-invoice-payload"}
-
-
 def start_with_shipping_callback(update, context):
     """Sends an invoice with shipping-payment."""
     chat_id = update.message.chat_id
@@ -334,13 +316,19 @@ def send_pay_button(update, context):
 
     requests.post(url, data=data)
 
-    res = requests(f'https://api.yookassa.ru/v3/payment/{env("PAYMENT_TOKEN")}')
 
-    # r = var_dump.var_dump(res)
-    print(res)
-
-
-
+    message_keyboard = [
+        ['Назад', 'Подтвердить оплату']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='После прохождения оплаты жми кнопку '
+                                   '"Подтвердить оплату"',
+                              reply_markup=markup)
+    return States.PAYMENT
 
 
 def add_user(update, context):
@@ -780,7 +768,18 @@ def show_orders(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text=messages, reply_markup=markup)
+    try:
+        update.message.reply_text(text=messages, reply_markup=markup)
+    except telegram.error.BadRequest:
+        message_keyboard = [
+            ['Назад', 'Главное меню']
+        ]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        update.message.reply_text(text='у вас нет заказов', reply_markup=markup)
     return States.CLIENT_ORDERS
 
 
@@ -984,6 +983,7 @@ if __name__ == '__main__':
             ],
             States.PRICE: [
                 MessageHandler(Filters.text("Назад"), start),
+                MessageHandler(Filters.text("Подтвердить оплату"), add_user),
                 MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, chooze_rate),
             ],
@@ -1027,12 +1027,12 @@ if __name__ == '__main__':
 
             ],
             States.RATE_CHOIСE: [
-                MessageHandler(Filters.text("Выбрать"), send_payment),
+                MessageHandler(Filters.text("Выбрать"), send_pay_button),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.PAYMENT: [
-                MessageHandler(Filters.text("Оплатить"), send_pay_button),
+                MessageHandler(Filters.text("Подтвердить оплату"), add_user),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(check_answer, handle_message_from_frilanser),
             ],
