@@ -1,20 +1,32 @@
+import json
 import os
 import logging
 import datetime
 import environs
 import requests
+# import var_dump as var_dump
+from pathlib import Path
 
+import telegram
+from environs import Env
+import time
 from enum import Enum, auto
 from textwrap import dedent
-from telegram import ParseMode
+from telegram import ParseMode, Bot
 from django.conf import settings
 from more_itertools import chunked
 from telegram.ext import MessageFilter
 from telegram import ReplyKeyboardMarkup
+from yookassa import Configuration, Payment
+from telegram import LabeledPrice, ShippingOption, Update
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
 from pprint import pprint
 
+env = Env()
+env.read_env()
+
+Path.cwd()
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +36,14 @@ class FilterAwesome(MessageFilter):
         return 'Взять в работу' in message.text or \
             'Подтвердить выполнение заказа' in message.text
 
+
 check_do_to_work = FilterAwesome()
 
 
 class FilterAnswer(MessageFilter):
     def filter(self, message):
         return 'Ответить исполнителю' in message.text
+
 
 check_answer = FilterAnswer()
 
@@ -178,9 +192,9 @@ def check_client(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-
-    with open('documents/Преимущества.pdf', 'rb') as image:
-        price_pdf = image.read()
+    # file = Path() / 'documents' / 'Преимущества.pdf'
+    # with open(file, 'rb') as file_pdf:
+    #     price_pdf = file_pdf.read()
 
     greeting_msg = dedent("""\
         Привет!✌️
@@ -190,11 +204,14 @@ def check_client(update, context):
 
         Это обязательная процедура, для продолжения пользования сайтом необходимо выбрать и оплатить тариф.
         """).replace("  ", "")
-    update.message.reply_document(
-        price_pdf,
-        filename="Преимущества.pdf",
-        caption=greeting_msg,
-        reply_markup=markup)
+    update.message.reply_text(text=greeting_msg, reply_markup=markup)
+
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
 
     return States.PRICE
 
@@ -219,7 +236,8 @@ def chooze_rate(update, context):
                         <b>Стоимость тарифа:</b>
                         {rate_price}
                        """).replace("    ", "")
-
+    context.user_data["rate_price"] = rate_price
+    context.user_data["rate_description"] = rate_description
     message_keyboard = [
         ['Назад', 'Выбрать']
     ]
@@ -245,9 +263,69 @@ def send_payment(update, context):
     )
     chat_id = context.user_data["telegram_id"]
     tariff = context.user_data["rate"]
-    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
+    # update.message.reply_text(text=start_with_shipping_callback(update, context),
     #                           reply_markup=markup)
     update.message.reply_text(text='жми оплатить',
+                              reply_markup=markup)
+    return States.PAYMENT
+
+
+def start_with_shipping_callback(update, context):
+    """Sends an invoice with shipping-payment."""
+    chat_id = update.message.chat_id
+    bot = Bot(token=env('TG_BOT_TOKEN'))
+    Configuration.account_id = env('SHOP_ID')
+    Configuration.secret_key = env('PAYMENT_TOKEN')
+
+    payment = Payment.create({
+        "amount": {
+            "value": context.user_data["rate_price"],
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": "https://www.google.com/"
+        },
+        "capture": True,
+        "description": context.user_data["rate_description"],
+        "metadata": {
+            "order_id": chat_id
+        }
+    })
+    return payment.confirmation.confirmation_url
+
+
+def send_pay_button(update, context):
+    invoice_url = start_with_shipping_callback(update, context)
+    chat_id = update.message.chat_id
+    method = 'sendMessage'
+    token = env('TG_BOT_TOKEN')
+    url = f'https://api.telegram.org/bot{token}/{method}'
+
+    data = {
+        'chat_id': chat_id, 'text': 'Нажми на кнопку ниже, для перехода на '
+                                    'сайт оплаты.',
+        'reply_markup':
+            json.dumps({
+            'inline_keyboard': [[{
+                'text': 'Оплата.',
+                'url': invoice_url }]]
+            })
+    }
+
+    requests.post(url, data=data)
+
+
+    message_keyboard = [
+        ['Назад', 'Подтвердить оплату']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text='После прохождения оплаты жми кнопку '
+                                   '"Подтвердить оплату"',
                               reply_markup=markup)
     return States.PAYMENT
 
@@ -259,7 +337,8 @@ def add_user(update, context):
         "payment_date": datetime.datetime.now()
     }
     response = call_api_post('api/clients/add/', payload=payload)
-    update.message.reply_text(text='Вы успешно зарегестрированы, можете начать пользоваться нашей платформой. Напишите /start')
+    update.message.reply_text(
+        text='Вы успешно зарегестрированы, можете начать пользоваться нашей платформой. Напишите /start')
 
 
 def check_frilancer(update, context):
@@ -326,13 +405,13 @@ def verify_freelancer(update, context):
 
 
 def check(update, context):
-
     order_id = update.message.text.replace('/order_', '')
     context.user_data['order_id'] = order_id
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
     context.user_data['client_chat_id'] = order['client']['chat_id']
     context.user_data['order_title'] = order["title"]
+    context.user_data['dialogue'] = order["dialogue"]
     message = f'Название заказа - {order["title"]}\n\nОписание: ' \
               f'{order["description"]}'
     if order['freelancer'] is None:
@@ -357,7 +436,7 @@ def check(update, context):
     else:
         message_keyboard = [
             [f'Подтвердить выполнение заказа №{order_id}'],
-            ['Получить контакт заказчика'],
+            ['Посмотреть переписку'],
             ['Назад']
         ]
     markup = ReplyKeyboardMarkup(
@@ -376,8 +455,37 @@ def check(update, context):
     return States.ORDERS
 
 
+def send_frilancer_dialogue(update, context):
+    order_title = context.user_data['order_title']
+    order_id = context.user_data['order_id']
+    dialogue_list = context.user_data['dialogue']
+    dialogue = ' '.join(dialogue_list)
+    message = dedent(f"""\
+                           <b>Название заказа</b>
+                           {order_title}
+                           <b>Переписка:</b>
+                           {dialogue}
+                          """).replace("    ", "")
+
+    message_keyboard = [
+        [f'Подтвердить выполнение заказа №{order_id}'],
+        ['Посмотреть переписку'],
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
+    return States.ORDERS
+
+
 def finish_orders(update, context):
-    order_id = update.message.text.replace('Подтвердить выполнение заказа №', '')
+    order_id = update.message.text.replace('Подтвердить выполнение заказа №',
+                                           '')
     endpoint = f'api/order/finish'
     payload = {
         "order_id": order_id,
@@ -420,20 +528,24 @@ def add_orders_to_frilancer(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text="Заказ взят в работу. Напишите клиенту об этом", reply_markup=markup)
+    update.message.reply_text(
+        text="Заказ взят в работу. Напишите клиенту об этом",
+        reply_markup=markup)
     return States.FRILANCER_ORDERS
 
 
 def send_message_to_client(update, context):
     message_from_frilanser = update.message.text
-    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
+    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(
+        update.message.from_user['last_name'])
     order_id = context.user_data['order_id']
+    order_title = context.user_data['order_title']
     message_to_client = dedent(f"""\
                     <b>Сообщение от {user_fullname}</b>
 
                     <b>Текст сообщение:</b>
                     {message_from_frilanser}
-                    
+
                     <b>Нажми кнопку "Ответить"</b>
                     """).replace("    ", "")
     endpoint = f'api/contact/'
@@ -445,13 +557,14 @@ def send_message_to_client(update, context):
 
     update.message.chat.id = context.user_data['client_chat_id']
     message_keyboard = [
-        [f'Ответить исполнителю/{context.user_data["telegram_id"]} - заказ №{order_id}']
+        [
+            f'Ответить исполнителю/{context.user_data["telegram_id"]} - заказ №{order_id}']
     ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
-        one_time_keyboard=True
-    )
+        one_time_keyboard=True)
+
     update.message.reply_text(text=message_to_client,
                               reply_markup=markup,
                               parse_mode=ParseMode.HTML)
@@ -469,6 +582,7 @@ def send_message_to_client(update, context):
                               reply_markup=markup)
     return States.ORDERS
 
+
 def handle_message_from_frilanser(update, context):
     message_from_button = update.message.text
     order_id = message_from_button.partition('№')[2]
@@ -482,7 +596,8 @@ def handle_message_from_frilanser(update, context):
 
 def send_message_to_frilanser(update, context):
     message_to_frilanser = update.message.text
-    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(update.message.from_user['last_name'])
+    user_fullname = str(update.message.from_user['first_name']) + ' ' + str(
+        update.message.from_user['last_name'])
     order_id = context.user_data['frilanser_order_id']
 
     message_to_frilancer = dedent(f"""\
@@ -558,8 +673,9 @@ def create_order_description(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text='Прикрепите файлы, если нужно (при отправки файла в ТГ уберите галочку сжатие)',
-                              reply_markup=markup)
+    update.message.reply_text(
+        text='Прикрепите файлы, если нужно (при отправки файла в ТГ уберите галочку сжатие)',
+        reply_markup=markup)
     return States.ORDER_FILES
 
 
@@ -614,7 +730,6 @@ def create_order(update, context):
         'files': order_files
     }
     call_api_post("api/order/add", payload)
-    pprint(payload)
 
     message_keyboard = [
         ['Назад']
@@ -629,7 +744,7 @@ def create_order(update, context):
 
         А пока я вам спою "ля-ля-ля, духаст мищь"
         Если вам понравилась песня, можете задонатить по номеру телефона +79805677474.
-        
+
         А если нет, то нажмите "Назад"
         """).replace("  ", "")
     update.message.reply_text(text=message, reply_markup=markup)
@@ -641,7 +756,8 @@ def show_orders(update, context):
     url = f'api/clients/{chat_id}/orders'
     orders = call_api_get(url)
     ps = [
-        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for count, p in enumerate(orders)]
+        f'/order_{p["id"]}⬅РЕДАКТИРОВАТЬ ЗАКАЗ. \n {p["title"]} \n\n' for
+        count, p in enumerate(orders)]
     messages = ' '.join(ps)
     message_keyboard = [
         ['Назад', 'Главное меню']
@@ -651,19 +767,33 @@ def show_orders(update, context):
         resize_keyboard=True,
         one_time_keyboard=True
     )
-    update.message.reply_text(text=messages, reply_markup=markup)
+    try:
+        update.message.reply_text(text=messages, reply_markup=markup)
+    except telegram.error.BadRequest:
+        message_keyboard = [
+            ['Назад', 'Главное меню']
+        ]
+        markup = ReplyKeyboardMarkup(
+            message_keyboard,
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
+        update.message.reply_text(text='у вас нет заказов', reply_markup=markup)
     return States.CLIENT_ORDERS
 
 
 def check_client_order(update, context):
-
     order_id = update.message.text.replace('/order_', '')
+    context.user_data['order_id'] = order_id
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
+    context.user_data['order_title'] = order["title"]
+    context.user_data['dialogue'] = order["dialogue"]
     message = f'Название заказа - {order["title"]}\n\nОписание: {order["description"]}'
     message_keyboard = [
-            ['Назад']
-        ]
+        ['Посмотреть переписку'],
+        ['Назад']
+    ]
     markup = ReplyKeyboardMarkup(
         message_keyboard,
         resize_keyboard=True,
@@ -678,6 +808,32 @@ def check_client_order(update, context):
             document,
             filename=document_name)
 
+    return States.CLIENT_ORDERS
+
+
+def send_client_dialogue(update, context):
+    order_title = context.user_data['order_title']
+    order_id = context.user_data['order_id']
+    dialogue_list = context.user_data['dialogue']
+    dialogue = ' '.join(dialogue_list)
+    message = dedent(f"""\
+                           <b>Название заказа</b>
+                           {order_title}
+                           <b>Переписка:</b>
+                           {dialogue}
+                          """).replace("    ", "")
+
+    message_keyboard = [
+        ['Назад']
+    ]
+    markup = ReplyKeyboardMarkup(
+        message_keyboard,
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    update.message.reply_text(text=message,
+                              reply_markup=markup,
+                              parse_mode=ParseMode.HTML)
     return States.CLIENT_ORDERS
 
 
@@ -777,22 +933,27 @@ if __name__ == '__main__':
             States.START: [
                 MessageHandler(Filters.text("Клиент 😊"), check_client),
                 MessageHandler(Filters.text("Исполнитель 🥷"), check_frilancer),
-                MessageHandler(Filters.text('Написать администратору ✍️'), message_to_admin),
+                MessageHandler(Filters.text('Написать администратору ✍️'),
+                               message_to_admin),
             ],
             States.ADMIN: [
                 MessageHandler(Filters.text, send_to_admin),
             ],
             States.VERIFICATE: [
-                MessageHandler(Filters.text('Пройти верификацию'), verify_freelancer),
+                MessageHandler(Filters.text('Пройти верификацию'),
+                               verify_freelancer),
                 MessageHandler(Filters.text, start),
             ],
             States.FRILANCER: [
                 MessageHandler(Filters.command(False), check),
                 CommandHandler('order', check),
                 MessageHandler(Filters.text('Выбрать заказ'), show_five_orders),
-                MessageHandler(Filters.text('Мои заказы'), show_frilancer_orders),
-                MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
-                MessageHandler(Filters.text('Взять в работу'), add_orders_to_frilancer),
+                MessageHandler(Filters.text('Мои заказы'),
+                               show_frilancer_orders),
+                MessageHandler(Filters.text('Следующие заказы'),
+                               show_five_orders),
+                MessageHandler(Filters.text('Взять в работу'),
+                               add_orders_to_frilancer),
                 MessageHandler(Filters.text('Назад'), show_five_orders),
 
                 MessageHandler(Filters.text, start),
@@ -801,9 +962,11 @@ if __name__ == '__main__':
                 MessageHandler(Filters.command(False), check),
                 CommandHandler('order', check),
                 MessageHandler(Filters.text('Назад'), show_five_orders),
-                MessageHandler(Filters.text('Показать все заказы в работе'), show_frilancer_orders),
+                MessageHandler(Filters.text('Показать все заказы в работе'),
+                               show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
-                MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
+                MessageHandler(Filters.text('Вернуться к заказам'),
+                               show_five_orders),
                 MessageHandler(check_do_to_work, add_orders_to_frilancer),
                 MessageHandler(Filters.text, send_message_to_client),
             ],
@@ -811,12 +974,15 @@ if __name__ == '__main__':
                 MessageHandler(Filters.command(False), check),
                 CommandHandler('order', check),
                 MessageHandler(Filters.text('Назад'), start),
-                MessageHandler(Filters.text('Предыдущие заказы'), show_five_orders),
-                MessageHandler(Filters.text('Следующие заказы'), show_five_orders),
+                MessageHandler(Filters.text('Предыдущие заказы'),
+                               show_five_orders),
+                MessageHandler(Filters.text('Следующие заказы'),
+                               show_five_orders),
                 MessageHandler(Filters.text, start),
             ],
             States.PRICE: [
                 MessageHandler(Filters.text("Назад"), start),
+                MessageHandler(Filters.text("Подтвердить оплату"), add_user),
                 MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, chooze_rate),
             ],
@@ -825,7 +991,10 @@ if __name__ == '__main__':
                 MessageHandler(Filters.text("Мои заказы"), show_orders),
                 MessageHandler(Filters.text('Назад'), show_frilancer_orders),
                 MessageHandler(Filters.text('Главное меню'), start),
-                MessageHandler(Filters.text('Вернуться к заказам'), show_five_orders),
+                MessageHandler(Filters.text('Вернуться к заказам'),
+                               show_five_orders),
+                MessageHandler(Filters.text('Посмотреть переписку'),
+                               send_frilancer_dialogue),
                 MessageHandler(check_do_to_work, finish_orders),
                 MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, send_message_to_client),
@@ -851,20 +1020,24 @@ if __name__ == '__main__':
                 CommandHandler('order', check_client_order),
                 MessageHandler(Filters.text('Назад'), check_client),
                 MessageHandler(Filters.text('Главное меню'), start),
+                MessageHandler(Filters.text('Посмотреть переписку'),
+                               send_client_dialogue),
                 MessageHandler(check_answer, handle_message_from_frilanser),
+
             ],
             States.RATE_CHOIСE: [
-                MessageHandler(Filters.text("Выбрать"), send_payment),
+                MessageHandler(Filters.text("Выбрать"), send_pay_button),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.PAYMENT: [
-                MessageHandler(Filters.text("Оплатить"), add_user),
+                MessageHandler(Filters.text("Подтвердить оплату"), add_user),
                 MessageHandler(Filters.text("Назад"), check_client),
                 MessageHandler(check_answer, handle_message_from_frilanser),
             ],
             States.ANSWER_TO_FRILANSER: [
                 MessageHandler(Filters.text("Назад"), check_client),
+                MessageHandler(check_answer, handle_message_from_frilanser),
                 MessageHandler(Filters.text, send_message_to_frilanser),
             ],
         },
