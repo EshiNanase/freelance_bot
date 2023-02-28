@@ -1,4 +1,4 @@
-from telegram_bot.models import Client, Tariff, Order, Freelancer
+from api.models import Client, Tariff, Order, Freelancer
 from django.shortcuts import get_object_or_404
 from http import HTTPStatus
 from rest_framework.response import Response

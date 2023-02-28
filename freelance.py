@@ -11,7 +11,6 @@ from django.conf import settings
 from more_itertools import chunked
 from telegram.ext import MessageFilter
 from telegram import ReplyKeyboardMarkup
-from telegram_bot.payment import send_payment_link
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
 from pprint import pprint

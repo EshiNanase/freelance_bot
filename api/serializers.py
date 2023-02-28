@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from telegram_bot.models import Client, Order, Freelancer, Tariff
+from api.models import Client, Order, Freelancer, Tariff
 
 
 class TariffSerializer(serializers.ModelSerializer):
