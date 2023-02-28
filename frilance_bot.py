@@ -14,7 +14,7 @@ from telegram import ReplyKeyboardMarkup
 from telegram_bot.payment import send_payment_link
 from telegram.ext import (CommandHandler, ConversationHandler, Filters,
                           MessageHandler, Updater)
-from pprint import pprint
+
 
 logger = logging.getLogger(__name__)
 
@@ -247,8 +247,8 @@ def send_payment(update, context):
     )
     chat_id = context.user_data["telegram_id"]
     tariff = context.user_data["rate"]
-    # update.message.reply_text(text=send_payment_link(chat_id, tariff),
-    #                           reply_markup=markup)
+    update.message.reply_text(text=send_payment_link(chat_id, tariff),
+                              reply_markup=markup)
     update.message.reply_text(text='жми оплатить',
                               reply_markup=markup)
     return States.PAYMENT
@@ -434,7 +434,6 @@ def add_orders_to_frilancer(update, context):
     order_id = update.message.text.replace('Взять в работу заказ №', '')
     endpoint = f'api/order/{order_id}'
     order = call_api_get(endpoint)
-    pprint(order)
     context.user_data['client_chat_id'] = order['client']['chat_id']
     endpoint = f'api/freelancers/appoint'
     payload = {
@@ -939,8 +938,9 @@ if __name__ == '__main__':
     )
 
     dispatcher.add_handler(conv_handler)
-    # dispatcher.add_error_handler(error)
+    dispatcher.add_error_handler(error)
     dispatcher.add_handler(CommandHandler("start", start))
 
     updater.start_polling()
     updater.idle()
+

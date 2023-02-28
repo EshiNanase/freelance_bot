@@ -5,6 +5,7 @@ from freelance import settings
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+
 def send_payment_link(chat_id, tariff):
 
     url = f'{settings.API_URL}/api/tariff/{tariff}'
@@ -24,5 +25,3 @@ def send_payment_link(chat_id, tariff):
                 success_url='https://www.youtube.com/watch?v=cuX5QQXbLDQ'
             )
     return checkout_session.url
-
-print(send_payment_link(0, 'VIP'))
